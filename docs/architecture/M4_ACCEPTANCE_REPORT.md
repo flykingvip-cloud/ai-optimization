@@ -1,31 +1,28 @@
-# M4 OpenBot × AI Optimization 沙箱联合验收报告
+# M4 OpenBot × AI Optimization 沙箱联合验收报告（补证定稿版）
 
 - **目标仓库**：`https://github.com/flykingvip-cloud/ai-optimization` (`main`)
 - **OpenBot 参考基线**：`25b6613e6`（未修改 OpenBot 主业务代码、未删除 AOR）
-- **本地验证**：`pnpm run check`（`tsc --noEmit` 0 错误；`vitest run` **8 个测试文件、25 个用例全部通过**，耗时 294ms）
 
 ---
 
-## 一、M4-01 ~ M4-06 联合验收矩阵
+## 一、M4-01 ~ M4-07 逐项联合验收矩阵
 
-| 编号 | 验收主题 | 核心实证路径 | 测试结果 |
-|---|---|---|---|
-| **M4-01** | 跨系统契约兼容性核对 | `docs/architecture/M4_01_CONTRACT_COMPATIBILITY_MATRIX.md`, `tests/contract/contracts.test.ts` | **Pass (4/4)** |
-| **M4-02** | 真实 OIDC Discovery + JWKS 缓存与密钥轮换 | `packages/shared-contracts/src/oidc-jwks.ts`, `tests/m4-sandbox/m4-oidc-jwks.test.ts` | **Pass (1/1)**（真实 HTTP IdP、轮换 `rot-1` → `rot-2`、`401` 过期、`403` 跨租户） |
-| **M4-03** | Telemetry 异步投递、幂等与故障隔离 | `packages/telemetry-sdk/src/index.ts`, `tests/m4-sandbox/m4-full-sandbox-e2e.test.ts` | **Pass**（远端不可达时零阻塞写磁盘 WAL，恢复后成功补发且幂等去重） |
-| **M4-04** | Dataset 治理、Evaluation 追溯与 Experiment 统计 | `services/{dataset-management,evaluation-engine,experiment-engine}/src/index.ts` | **Pass** |
-| **M4-05** | Artifact 完整签名、作用域、过期、撤销与防重放 | `services/artifact-registry/src/index.ts`, `tests/integration/secondary-audit-remediation.test.ts` | **Pass (5/5)** |
-| **M4-06** | OpenBot 单状态机治理闭环（Approval → Canary → Revoke → Rollback） | `tests/m4-sandbox/m4-full-sandbox-e2e.test.ts` | **Pass**（AI Optimization 仅发 `410 revoked`，OpenBot 执行回滚并回报 `deployment.*`） |
+| 编号 | 验收主题 | 核心实证路径 | 实际测试行为 | 验收结论 |
+|---|---|---|---|---|
+| **M4-01** | 跨系统契约兼容性核对 | `docs/architecture/M4_01_CONTRACT_COMPATIBILITY_MATRIX.md`, `tests/contract/contracts.test.ts` | Ajv 2020-12 校验 6 套 JSON Schema 与 OpenAPI 3.1 | **Pass (4/4)** |
+| **M4-02** | 加固后 OIDC Discovery / JWKS 密钥轮换 | `packages/shared-contracts/src/oidc-jwks.ts`, `tests/m4-sandbox/m4-oidc-jwks.test.ts` | 本地 HTTP IdP、强制 `issuer` 与 HTTPS 校验、忽略 `use: "enc"` 密钥、轮换 `rot-1 → rot-2`、超时与负缓存、`401`/`403` | **Pass (2/2)**（限本地测试 IdP） |
+| **M4-03** | Telemetry 进程崩溃 WAL 恢复与故障隔离 | `packages/telemetry-sdk/src/index.ts`, `tests/m4-sandbox/m4-full-sandbox-e2e.test.ts` | Client A 写入 WAL 并追加损坏尾部模拟崩溃 → Client B 重启恢复并补发 → 幂等去重 | **Pass** |
+| **M4-04** | Dataset HTTP 治理、Evaluation 与 Experiment | `tests/m4-sandbox/m4-full-sandbox-e2e.test.ts` | HTTP `POST /v1/datasets/ds_m4` 验证 `201`、不可变 `409`、PII `400`、跨租户 `403` + Evaluation + Experiment | **Pass** |
+| **M4-05** | Artifact 完整签名、作用域、撤销与防重放 | `services/artifact-registry/src/index.ts`, `tests/integration/secondary-audit-remediation.test.ts` | 逐字段篡改拒绝、`min/maxOpenBotVersion`、`agentIds`、`approvalPolicy`、`410 revoked`、`monotonicEpoch` | **Pass (5/5)** |
+| **M4-06** | OpenBot 状态机 Canary → Rollback 闭环 | `tests/m4-sandbox/m4-full-sandbox-e2e.test.ts` | 本地调用 `openbot/packages/evolution-core/src/state-machine.ts`（CI 用等价冻结状态机）执行 `apply_canary → CANARY → 410 → rollback → ROLLED_BACK` 并回传 `deployment.rollback.completed` | **Pass** |
+| **M4-07** | 联合验收汇总、兼容性差异与风险定界 | `docs/architecture/M4_ACCEPTANCE_REPORT.md` | 汇总全部测试证据、SQLite ↔ PostgreSQL 差异及生产准入前置项 | **Pass** |
 
 ---
 
 ## 二、SQLite vs PostgreSQL 行为差异与生产准入遗留项
 
-1. **数据库并发与锁差异（M4 沙箱限 SQLite）**：
-   - SQLite `WAL` 模式为单写多读进程内文件锁，适合单实例与沙箱测试；
-   - 生产环境切换 PostgreSQL 时需补齐：连接池与 `pg_advisory_lock` / `SERIALIZABLE` 或 `INSERT ... ON CONFLICT DO NOTHING` 幂等语句、JSONB 索引、`TIMESTAMP WITH TIME ZONE` 原生类型及真实 PostgreSQL 迁移流水线。
-2. **OpenBot 侧沙箱外发适配待合入**：
-   - OpenBot 主仓库当前仍待在独立 PR 中补齐 W3C `traceparent` 上下文传播、`promptVersion` 注入及 `collaboration-satisfaction.ts` 的 `runId` 强绑定。
+1. **数据库并发与锁差异（M4 沙箱限 SQLite）**：生产切换 PostgreSQL 需补齐连接池、`INSERT ... ON CONFLICT DO NOTHING`、JSONB 索引及真实 PostgreSQL 迁移流水线。
+2. **OpenBot 侧沙箱外发适配 PR 待合入**：OpenBot 仓库侧需在独立 PR 中补齐 W3C `traceparent`、`promptVersion` 注入及 `collaboration-satisfaction.ts` 的 `runId` 强绑定。
 3. **最终阶段判断**：
-   - **M4 沙箱联调（在隔离沙箱与测试数据下）：通过**；
-   - **生产环境全量准入**：待完成 PostgreSQL 适配器验证及 OpenBot 侧 Telemetry/Consumer PR 合入后开启。
+   - **M4 沙箱阶段（隔离沙箱 + 测试数据）：通过**；
+   - **生产环境全量准入：保持关闭**（待 PostgreSQL 生产验证、真实生产 OIDC IdP 联调及 OpenBot 侧 PR 合入后开启）。
