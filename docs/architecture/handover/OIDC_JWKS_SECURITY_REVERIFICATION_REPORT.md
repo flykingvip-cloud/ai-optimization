@@ -5,7 +5,9 @@
 - 分支：`feat/p0-1-oidc-jwks-security`
 - 基线：`origin/main` = `4716abb81a8b15e8b10b80cd04965b69eb7dcc15`（开始实施时已 `git fetch`，main 未前进）
 - 代码与测试提交：`0d315d376b617e5c552d6282298952d6a6eeb88f`
+- 复验报告初稿提交：`c212a4563a055d5de709f39bafe25ace448332bc`
 - 实施日期：2026-11-27（Asia/Shanghai）
+- CI：GitHub Actions Workflow `CI` / Job `verify` 在 SHA `c212a45` 上已成功（见第 1 节）
 - 生产准入：保持关闭
 
 ## 1. 证据分层结论
@@ -16,14 +18,14 @@
 | --- | --- |
 | 源码实现 | 已在 `packages/shared-contracts/src/oidc-jwks.ts` 落地流式限长、Discovery issuer 精确校验、非 HTTPS `jwks_uri` 拒绝、重定向限制、默认收紧的 JWKS 主机/CIDR 允许列表，以及解析后的私网/回环/链路本地/元数据地址拦截。JWK `use` / `alg` / `key_ops` / `kid` 过滤已补强。 |
 | 自动化测试 | 本地已跑通。`pnpm run check`：`tsc --noEmit` 通过；`vitest run` 为 8 个文件 / 40 个测试全部通过，其中本专题 `tests/m4-sandbox/m4-oidc-jwks.test.ts` 为 16 个测试全部通过。测试未连接任何生产 IdP。 |
-| CI | 本报告撰写时尚未将分支推送到 GitHub，因此没有本分支的 Actions Run 结论。推送并开 PR 后需另行记录 Run URL 与当时状态。不得把基线 CI `45932557643` 当作本轮改动的 CI 证据。 |
+| CI | 本分支已有成功的 GitHub Actions 证据，见下方 Run。该结果证明本仓 CI 工作流在对应 SHA 上通过，不是生产 IdP 联调通过，也不得把基线 CI `45932557643` 当作本轮改动的 CI 证据。 |
 | 真实生产 IdP 联调 | **未完成。** 本轮只使用显式开启的 localhost HTTP 测试 IdP，以及注入的 `fetchFn` / `dnsLookupFn` 模拟。 |
 | 生产验证 | **未进行。** 未连接生产数据库，未修改生产配置，未切换生产流量。 |
 
 ### 工程标准已达 / 生产 IdP 未完成
 
-- **工程标准（本仓 P0-1 范围内）**：源码已关闭审计列出的主要实现缺口；自动化测试标题与断言已对齐，并覆盖计划中的限长、重定向、SSRF/允许列表、JWK 过滤、超时、负缓存、singleflight、密钥轮换、过期令牌、认证与授权错误区分、跨租户拒绝等场景。
-- **生产 IdP 联调：未完成。** 不得将 localhost / mock IdP 测试解释为生产 IdP 联调通过。
+- **工程标准（本仓 P0-1 范围内）**：源码已关闭审计列出的主要实现缺口；自动化测试标题与断言已对齐，并覆盖计划中的限长、重定向、SSRF/允许列表、JWK 过滤、超时、负缓存、singleflight、密钥轮换、过期令牌、认证与授权错误区分、跨租户拒绝等场景。本分支 CI 已在 SHA `c212a4563a055d5de709f39bafe25ace448332bc` 上成功。
+- **生产 IdP 联调：未完成。** 不得将 localhost / mock IdP 测试解释为生产 IdP 联调通过。也不得把本仓 CI 成功解释为生产验证通过。
 
 真实生产 IdP 联调仍需以下前置条件，本轮均不具备：
 
@@ -149,7 +151,31 @@ $ pnpm exec vitest run tests/m4-sandbox/m4-oidc-jwks.test.ts
 15. coalesces concurrent JWKS refreshes through singleflight
 16. filters use=enc, alg-mismatched, key_ops-without-verify, missing-kid, and invalid JWK material, then rejects an unknown kid
 
-## 5. 尚未覆盖的场景与风险
+## 5. CI 结果
+
+PR：https://github.com/flykingvip-cloud/ai-optimization/pull/2
+
+已记录的成功 Run：
+
+- Workflow：`CI`
+- Event：`pull_request`
+- Job：`verify`
+- Run ID：`46023375682`
+- URL：https://github.com/flykingvip-cloud/ai-optimization/actions/runs/46023375682
+- SHA：`c212a4563a055d5de709f39bafe25ace448332bc`
+- 状态：`completed` / `success`
+- 完成时间：2026-11-27 23:16 CST（Asia/Shanghai；Actions 时间戳为 2026-11-27T15:16:33Z）
+
+成功步骤包括：
+
+- TypeScript typecheck（`pnpm run typecheck` / `tsc --noEmit`）
+- Contract, Security, Resilience, Persistence & Unit Tests：`Test Files 8 passed (8)`，`Tests 40 passed (40)`
+- Dependency vulnerability audit（`pnpm audit --audit-level=high`）：`No known vulnerabilities found`
+- Secret scanning check
+
+若本报告随后因补充 CI 记录而产生新的提交，新 HEAD 会触发另一次 Actions；应以当时最新成功 Run 为准，但不得把后续仅文档变更的 CI 失败或等待中状态回写为上述 Run 未发生。
+
+## 6. 尚未覆盖的场景与风险
 
 1. **真实生产 IdP 联调未做。** 没有对外部正式 issuer 发起 Discovery/JWKS 请求，也没有验证真实证书链、OCSP/CRL 或 IdP 侧轮换窗口。
 2. **自定义 `fetchFn` 不钉扎套接字地址。** 地址策略在调用前执行；若调用方提供的 `fetchFn` 忽略 `redirect: "manual"` 或自行解析另一组 DNS 结果，防护会减弱。默认出站路径不受此限制。
@@ -158,10 +184,10 @@ $ pnpm exec vitest run tests/m4-sandbox/m4-oidc-jwks.test.ts
 5. **IPv6 / NAT64 / 罕见 IP 字面量形式可能仍有边角。** 已覆盖 IPv4 映射、常见特殊网段和 Node `URL` 会归一化的十进制/十六进制 IPv4，但不能声称穷尽全部解析差异。
 6. **算法面仍仅限 EdDSA 与 RS256。** 若未来生产 IdP 只提供 ES256 或其他算法，需要单独评估后再扩展，不得为了联调临时放宽校验。
 7. **超大响应测试验证的是流在超过阈值后停止消费，而不是内核级或断电级的内存上限。** 取消时仍可能有已排队的一两块数据被计入读取量。
-8. **本报告撰写时没有本分支 CI 结论。** 合并前必须确认 GitHub Actions 成功。
-9. **OIDC 客户端配置变更是行为收紧。** 现有调用方如果未设置 `allowedJwksHosts`，在生产路径上将无法拉取任意公网 JWKS。这是有意为之，接入时需要显式配置。
+8. **OIDC 客户端配置变更是行为收紧。** 现有调用方如果未设置 `allowedJwksHosts`，在生产路径上将无法拉取任意公网 JWKS。这是有意为之，接入时需要显式配置。
+9. **CI 成功只覆盖本仓工作流。** 它不包含真实生产 IdP、跨仓 OpenBot 联调或 PostgreSQL 生产验证。
 
-## 6. 生产准入
+## 7. 生产准入
 
 P0-1 的工程缺口已在本仓源码和自动化测试层关闭，但这只是生产准入条件中的一项准备工作。
 
