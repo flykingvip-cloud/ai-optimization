@@ -1,24 +1,40 @@
 import { createHash, sign, verify } from "node:crypto";
+import type { OptimizationDatabase } from "../../../packages/shared-contracts/src/db.js";
 import type { AuthContext, OptimizationArtifact } from "../../../packages/shared-contracts/src/index.js";
 
-function canonicalSigningBytes(artifact: Omit<OptimizationArtifact, "signature">): Buffer {
-  const canonical = {
-    artifactId: artifact.artifactId,
-    artifactType: artifact.artifactType,
-    artifactVersion: artifact.artifactVersion,
-    schemaVersion: artifact.schemaVersion,
-    tenantId: artifact.tenantId,
-    targetScope: artifact.targetScope,
-    issuedAt: artifact.issuedAt,
-    expiresAt: artifact.expiresAt,
-    monotonicEpoch: artifact.monotonicEpoch,
-    contentHash: artifact.contentHash,
-  };
-  return Buffer.from(JSON.stringify(canonical), "utf8");
+function sortKeysDeep(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(sortKeysDeep);
+  }
+  if (value && typeof value === "object") {
+    const sorted: Record<string, unknown> = {};
+    for (const key of Object.keys(value as Record<string, unknown>).toSorted()) {
+      sorted[key] = sortKeysDeep((value as Record<string, unknown>)[key]);
+    }
+    return sorted;
+  }
+  return value;
+}
+
+/**
+ * Canonical JSON serialization covering the COMPLETE OptimizationArtifact,
+ * excluding only `signature` and mutable post-issuance `revocationStatus`.
+ * All security-critical metadata (`approvalPolicy`, `sourceExperimentId`,
+ * `evaluationReportRef`, `datasetVersion`, `issuer`, `rollbackTargetArtifactId`,
+ * `targetScope`, `tenantId`, `monotonicEpoch`, etc.) is signed.
+ */
+export function canonicalSigningBytes(
+  artifact: Omit<OptimizationArtifact, "signature" | "revocationStatus"> & {
+    readonly signature?: unknown;
+    readonly revocationStatus?: unknown;
+  },
+): Buffer {
+  const { signature: _sig, revocationStatus: _rev, ...signable } = artifact;
+  return Buffer.from(JSON.stringify(sortKeysDeep(signable)), "utf8");
 }
 
 export function computePayloadSha256(payload: Record<string, unknown>): string {
-  return createHash("sha256").update(JSON.stringify(payload)).digest("hex");
+  return createHash("sha256").update(JSON.stringify(sortKeysDeep(payload))).digest("hex");
 }
 
 function compareSemver(a: string, b: string): number {
@@ -52,6 +68,11 @@ export class ArtifactRegistryService {
   private readonly artifacts = new Map<string, OptimizationArtifact>();
   private readonly publicKeys = new Map<string, string>();
   private readonly revokedIds = new Set<string>();
+  private readonly db: OptimizationDatabase | undefined;
+
+  constructor(db?: OptimizationDatabase) {
+    this.db = db;
+  }
 
   registerTrustedKey(keyId: string, publicKeyPem: string): void {
     this.publicKeys.set(keyId, publicKeyPem);
@@ -75,18 +96,45 @@ export class ArtifactRegistryService {
     };
     const signature = sign(null, canonicalSigningBytes(unsigned), privateKeyPem).toString("base64");
     const artifact: OptimizationArtifact = { ...unsigned, signature };
-    this.artifacts.set(artifact.artifactId, artifact);
+    if (this.db) {
+      this.db.db
+        .prepare(
+          "INSERT INTO optimization_artifacts (artifact_id, tenant_id, revocation_status, artifact_json) VALUES (?, ?, ?, ?)",
+        )
+        .run(artifact.artifactId, artifact.tenantId, artifact.revocationStatus, JSON.stringify(artifact));
+    } else {
+      this.artifacts.set(artifact.artifactId, artifact);
+    }
     return artifact;
   }
 
+  getArtifact(auth: AuthContext, artifactId: string): OptimizationArtifact | null {
+    if (this.db) {
+      const row = this.db.db
+        .prepare("SELECT artifact_json FROM optimization_artifacts WHERE artifact_id = ? AND tenant_id = ?")
+        .get(artifactId, auth.tenantId) as { artifact_json: string } | undefined;
+      return row ? (JSON.parse(row.artifact_json) as OptimizationArtifact) : null;
+    }
+    const found = this.artifacts.get(artifactId);
+    return found && found.tenantId === auth.tenantId ? found : null;
+  }
+
   revokeArtifact(auth: AuthContext, artifactId: string): OptimizationArtifact | null {
-    const existing = this.artifacts.get(artifactId);
-    if (!existing || existing.tenantId !== auth.tenantId) {
+    const existing = this.getArtifact(auth, artifactId);
+    if (!existing) {
       return null;
     }
     this.revokedIds.add(artifactId);
     const updated: OptimizationArtifact = { ...existing, revocationStatus: "revoked" };
-    this.artifacts.set(artifactId, updated);
+    if (this.db) {
+      this.db.db
+        .prepare(
+          "UPDATE optimization_artifacts SET revocation_status = ?, artifact_json = ? WHERE artifact_id = ? AND tenant_id = ?",
+        )
+        .run("revoked", JSON.stringify(updated), artifactId, auth.tenantId);
+    } else {
+      this.artifacts.set(artifactId, updated);
+    }
     return updated;
   }
 
@@ -108,7 +156,12 @@ export class ArtifactRegistryService {
     if (!artifact.targetScope.agentIds.includes(context.targetAgentId)) {
       return { valid: false, reason: "agent_scope_mismatch" };
     }
-    if (artifact.revocationStatus === "revoked" || this.revokedIds.has(artifact.artifactId)) {
+    const isRevokedInDb = this.db
+      ? ((this.db.db
+          .prepare("SELECT revocation_status FROM optimization_artifacts WHERE artifact_id = ?")
+          .get(artifact.artifactId) as { revocation_status: string } | undefined)?.revocation_status === "revoked")
+      : false;
+    if (artifact.revocationStatus === "revoked" || this.revokedIds.has(artifact.artifactId) || isRevokedInDb) {
       return { valid: false, reason: "revoked" };
     }
     const nowMs = Date.parse(context.nowIso ?? new Date().toISOString());
@@ -140,8 +193,7 @@ export class ArtifactRegistryService {
     if (!pubKey) {
       return { valid: false, reason: "unknown_key" };
     }
-    const { signature, ...unsigned } = artifact;
-    const ok = verify(null, canonicalSigningBytes(unsigned), pubKey, Buffer.from(signature, "base64"));
+    const ok = verify(null, canonicalSigningBytes(artifact), pubKey, Buffer.from(artifact.signature, "base64"));
     return ok ? { valid: true } : { valid: false, reason: "invalid_signature" };
   }
 }

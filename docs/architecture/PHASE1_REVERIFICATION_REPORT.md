@@ -1,31 +1,19 @@
-# AI Optimization Phase 1 验收整改与独立复验报告
+# AI Optimization Phase 1 验收整改与独立复验报告（二次核查补充版）
 
 - **目标仓库**：`https://github.com/flykingvip-cloud/ai-optimization` (`main`)
-- **依据文档**：`PHASE1_STAGE_ACCEPTANCE_AUDIT_f339338.md`
-- **本地验证**：`pnpm run check`（`tsc --noEmit` 0 错误；`vitest run` **5 个测试文件、18 个用例全部通过**，耗时 293ms）
+- **依据文档**：`PHASE1_STAGE_ACCEPTANCE_AUDIT_f339338.md` 及二次源码核查意见（`P0-06`–`P0-07`、`P1-07`–`P1-11`）
+- **定位声明**：本报告确认 **Phase 1 工程与安全底座复验通过**，可进入 **OpenBot 沙箱联调准入**；生产环境全量放量仍需完成 M4 跨系统真实沙箱联调验收。
 
 ---
 
-## 一、P0 与 P1 整改完成矩阵
+## 一、二次核查补充整改矩阵
 
-| 编号 | 整改项 | 对应缺口 | 核心实现路径 | 验证结果 |
-|---|---|---|---|---|
-| **P0-01** | 契约校验体系（Ajv 2020-12 + OpenAPI 3.1 + TaskOutcome Schema） | A | `contracts/json-schema/task-outcome-event.schema.json`, `packages/shared-contracts/src/validator.ts`, `tests/contract/contracts.test.ts` | **Pass** (4/4) |
-| **P0-02** | 真实 JWT/OIDC 身份认证（`iss`/`aud`/`exp`/`nbf`/`sub`/`tenantId`/防服务冒充） | B | `packages/shared-contracts/src/auth.ts`, `tests/security/security-and-auth.test.ts` | **Pass** |
-| **P0-03** | Dataset 服务端主动 Secret/PII 扫描 | C | `services/dataset-management/src/scanner.ts`, `services/dataset-management/src/index.ts` | **Pass** |
-| **P0-04** | Telemetry 字段级白名单与结构化脱敏 | D | `packages/telemetry-sdk/src/index.ts` (`sanitizeTelemetryPayload`) | **Pass** |
-| **P0-05** | Artifact `maxOpenBotVersion`、`agentIds`、`approvalPolicy` 与消费者契约 | H, I | `services/artifact-registry/src/index.ts` (`verifyForOpenBot`) | **Pass** |
-| **P1-01** | SQLite 持久化存储与事务性迁移/回滚 | G | `packages/shared-contracts/src/db.ts` (`OptimizationDatabase`, `CORE_MIGRATIONS`) | **Pass** |
-| **P1-02** | Telemetry 有界磁盘 WAL 与故障注入恢复 | J | `packages/telemetry-sdk/src/index.ts`, `tests/integration/persistence-wal-perf.test.ts` | **Pass** |
-| **P1-03** | CI 安全门禁（Typecheck + Tests + Dependency Audit + Secret Scan） | K | `.github/workflows/ci.yml` | **Configured & Verified** |
-| **P1-04** | 迁移、并发与吞吐性能验证（1,000 events < 2,000ms） | L | `tests/integration/persistence-wal-perf.test.ts` | **Pass** |
-| **P1-05** | Experiment Engine（确定性分流、功效/样本量、Holm-Bonferroni、早停） | E | `services/experiment-engine/src/index.ts`, `tests/integration/experiment-and-judge.test.ts` | **Pass** |
-| **P1-06** | Judge 可信度（Cohen's Kappa、漂移检测、专家复核覆写） | F | `services/evaluation-engine/src/reliability.ts`, `tests/integration/experiment-and-judge.test.ts` | **Pass** |
-
----
-
-## 二、复验结论
-
-- 全部 **5 项 P0** 与 **6 项 P1** 整改项均已落地源码与自动化测试，Phase 1 阶段复验 **通过**。
-- OpenBot 主业务代码与 AOR 源码保持零侵入、零删除。
-- 后续进入 Phase 2 联调时，仅需将 OpenBot 侧沙箱 Telemetry 外发器与 `ArtifactRegistryService.verifyForOpenBot` 联调即可。
+| 编号 | 整改项 | 核心实现路径 | 验证结果 |
+|---|---|---|---|
+| **P0-06** | Artifact 完整规范化签名（覆盖 `approvalPolicy`、`sourceExperimentId`、`evaluationReportRef`、`datasetVersion`、`issuer`、`rollbackTargetArtifactId` 等全量元数据，仅排除 `signature` 与可变 `revocationStatus`） | `services/artifact-registry/src/index.ts` (`canonicalSigningBytes`, `sortKeysDeep`) | **Pass**（逐字段篡改测试全部拒绝 `invalid_signature`） |
+| **P0-07** | 真实 HTTP 服务入口接入 JWT/OIDC 与 JWKS 多密钥轮换 | `services/http-api/src/server.ts`, `packages/shared-contracts/src/auth.ts` | **Pass**（`401` 未认证、`403` 跨租户、`202` 密钥轮换全覆盖） |
+| **P1-07** | 全核心服务接入 `OptimizationDatabase` (`node:sqlite`) 持久化 | `services/{telemetry-ingestion,dataset-management,evaluation-engine,experiment-engine,artifact-registry}/src/index.ts` | **Pass**（关闭并重开磁盘 DB 后 5 个服务读写全保留） |
+| **P1-08** | Telemetry 磁盘 WAL 原子写入（`tmp + fsyncSync + renameSync`）、损坏尾部容错与超限淘汰 | `packages/telemetry-sdk/src/index.ts` | **Pass** |
+| **P1-09** | Experiment 真实统计功效/最小样本量计算及 `bonferroni` / `holm_bonferroni` / `fdr_bh` 多重比较校正 | `services/experiment-engine/src/index.ts` | **Pass** |
+| **P1-10** | Judge 分布漂移检测（PSI + 均值偏移），可检出均值不变但分布双峰化的漂移 | `services/evaluation-engine/src/reliability.ts` | **Pass** |
+| **P1-11** | GitHub Actions CI 完整运行记录核验 | `.github/workflows/ci.yml` + `gh run list` | **以实际推送后 CI Run ID 核验为准** |

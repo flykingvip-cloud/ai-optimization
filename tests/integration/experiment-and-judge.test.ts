@@ -57,12 +57,13 @@ describe("P1-05/06 Experiment Engine & Judge Reliability", () => {
 
     const win = svc.evaluateOutcome(AUTH, {
       experimentId: "exp_1",
-      sampleSizeActual: 120,
+      sampleSizeActual: 2000,
       observedEffect: 0.08,
       rawPValues: [0.01, 0.2],
       guardrailBreached: false,
     });
     expect(win.conclusion).toBe("win");
+    expect(win.achievedPower).toBeGreaterThanOrEqual(0.8);
   });
 
   it("P1-06 computes Cohen's Kappa, detects Judge drift, and isolates expert override from model self-eval", async () => {

@@ -77,8 +77,8 @@ export interface TelemetryClientMetrics {
 }
 
 /**
- * Non-blocking, bounded-queue + bounded-disk-WAL Telemetry client for OpenBot Runtime.
- * Never throws or blocks the caller's critical execution path.
+ * Non-blocking, bounded-queue + crash-consistent atomic disk WAL Telemetry client.
+ * Uses temp file + fsync + atomic rename so partial writes cannot corrupt the WAL.
  */
 export class BoundedTelemetryClient {
   private readonly maxQueueItems: number;
@@ -93,7 +93,7 @@ export class BoundedTelemetryClient {
 
   constructor(options: TelemetryClientOptions) {
     this.maxQueueItems = Math.max(1, options.maxQueueItems ?? 10_000);
-    this.maxWalBytes = Math.max(1024, options.maxWalBytes ?? 64 * 1024 * 1024);
+    this.maxWalBytes = Math.max(256, options.maxWalBytes ?? 64 * 1024 * 1024);
     this.walFilePath = options.walFilePath;
     this.transport = options.transport;
     this.recoverFromWal();
@@ -105,28 +105,43 @@ export class BoundedTelemetryClient {
       if (!fs.existsSync(this.walFilePath)) return;
       const lines = fs.readFileSync(this.walFilePath, "utf8").split("\n").filter(Boolean);
       for (const line of lines) {
-        const evt = JSON.parse(line) as TelemetryEvent;
-        if (this.queue.length >= this.maxQueueItems) {
-          this.queue.shift();
-          this.droppedCount += 1;
+        try {
+          const evt = JSON.parse(line) as TelemetryEvent;
+          if (this.queue.length >= this.maxQueueItems) {
+            this.queue.shift();
+            this.droppedCount += 1;
+          }
+          this.queue.push(evt);
+        } catch {
+          // Ignore corrupt trailing line while preserving valid prior records
+          this.walWriteErrorCount += 1;
         }
-        this.queue.push(evt);
       }
     } catch {
       this.walWriteErrorCount += 1;
     }
   }
 
-  private persistWalSnapshot(): void {
+  private persistWalAtomic(): void {
     if (!this.walFilePath) return;
     try {
       fs.mkdirSync(path.dirname(this.walFilePath), { recursive: true });
-      const content = this.queue.map((e) => JSON.stringify(e)).join("\n") + (this.queue.length ? "\n" : "");
-      if (Buffer.byteLength(content, "utf8") > this.maxWalBytes) {
-        this.walWriteErrorCount += 1;
-        return;
+      // Evict oldest items until serialized WAL fits within maxWalBytes so new events persist
+      let content = this.queue.map((e) => JSON.stringify(e)).join("\n") + (this.queue.length ? "\n" : "");
+      while (this.queue.length > 0 && Buffer.byteLength(content, "utf8") > this.maxWalBytes) {
+        this.queue.shift();
+        this.droppedCount += 1;
+        content = this.queue.map((e) => JSON.stringify(e)).join("\n") + (this.queue.length ? "\n" : "");
       }
-      fs.writeFileSync(this.walFilePath, content, "utf8");
+      const tmpPath = `${this.walFilePath}.tmp.${process.pid}`;
+      const fd = fs.openSync(tmpPath, "w", 0o600);
+      try {
+        fs.writeSync(fd, content, 0, "utf8");
+        fs.fsyncSync(fd);
+      } finally {
+        fs.closeSync(fd);
+      }
+      fs.renameSync(tmpPath, this.walFilePath);
     } catch {
       this.walWriteErrorCount += 1;
     }
@@ -148,7 +163,7 @@ export class BoundedTelemetryClient {
         this.droppedCount += 1;
       }
       this.queue.push(sanitized);
-      this.persistWalSnapshot();
+      this.persistWalAtomic();
     } catch {
       this.droppedCount += 1;
     }
@@ -162,7 +177,7 @@ export class BoundedTelemetryClient {
     try {
       await this.transport.send(batch);
       this.exportedCount += batch.length;
-      this.persistWalSnapshot();
+      this.persistWalAtomic();
     } catch {
       this.exportErrorCount += 1;
       for (const evt of batch) {
@@ -172,7 +187,7 @@ export class BoundedTelemetryClient {
         }
         this.queue.push(evt);
       }
-      this.persistWalSnapshot();
+      this.persistWalAtomic();
     }
   }
 
