@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openbot.love/schemas/ai-optimization/v1/telemetry-event.schema.json",
+  "title": "TelemetryEvent",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "eventId",
+    "idempotencyKey",
+    "eventType",
+    "occurredAt",
+    "tenantId",
+    "source",
+    "traceContext",
+    "redaction",
+    "payload"
+  ],
+  "properties": {
+    "schemaVersion": { "type": "string", "const": "1.0.0" },
+    "eventId": { "type": "string", "minLength": 1 },
+    "idempotencyKey": { "type": "string", "minLength": 1 },
+    "eventType": {
+      "type": "string",
+      "enum": [
+        "runtime.run.started",
+        "runtime.run.completed",
+        "runtime.run.failed",
+        "runtime.model.called",
+        "runtime.tool.called",
+        "runtime.task_outcome.recorded",
+        "runtime.feedback.recorded",
+        "evaluation.completed",
+        "experiment.completed",
+        "artifact.created",
+        "artifact.revoked",
+        "deployment.completed",
+        "deployment.rollback.completed"
+      ]
+    },
+    "occurredAt": { "type": "string", "format": "date-time" },
+    "tenantId": { "type": "string", "minLength": 1 },
+    "source": {
+      "type": "object",
+      "required": ["system", "component"],
+      "properties": {
+        "system": { "type": "string", "enum": ["openbot", "ai-optimization"] },
+        "component": { "type": "string", "minLength": 1 }
+      }
+    },
+    "traceContext": {
+      "type": "object",
+      "required": ["traceId", "runId"],
+      "properties": {
+        "traceId": { "type": "string", "minLength": 1 },
+        "spanId": { "type": "string" },
+        "parentSpanId": { "type": "string" },
+        "taskId": { "type": "string" },
+        "runId": { "type": "string", "minLength": 1 },
+        "sessionId": { "type": "string" },
+        "agentId": { "type": "string" },
+        "agentVersion": { "type": "string" },
+        "promptVersion": { "type": "string" },
+        "toolPolicyVersion": { "type": "string" },
+        "experimentId": { "type": "string" }
+      }
+    },
+    "redaction": {
+      "type": "object",
+      "required": ["applied", "policy"],
+      "properties": {
+        "applied": { "type": "boolean" },
+        "policy": { "type": "string", "minLength": 1 },
+        "piiStripped": { "type": "boolean" }
+      }
+    },
+    "payload": { "type": "object" }
+  }
+}

@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openbot.love/schemas/ai-optimization/v1/optimization-artifact.schema.json",
+  "title": "OptimizationArtifact",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "artifactId",
+    "artifactType",
+    "artifactVersion",
+    "schemaVersion",
+    "tenantId",
+    "targetScope",
+    "sourceExperimentId",
+    "evaluationReportRef",
+    "datasetVersion",
+    "createdAt",
+    "issuedAt",
+    "expiresAt",
+    "rollbackTargetArtifactId",
+    "contentHash",
+    "signature",
+    "signatureAlgorithm",
+    "keyId",
+    "issuer",
+    "approvalPolicy",
+    "revocationStatus",
+    "monotonicEpoch",
+    "payload"
+  ],
+  "properties": {
+    "artifactId": { "type": "string", "minLength": 1 },
+    "artifactType": {
+      "type": "string",
+      "enum": ["prompt_template", "model_routing_policy", "agent_policy", "tool_strategy"]
+    },
+    "artifactVersion": { "type": "string", "minLength": 1 },
+    "schemaVersion": { "type": "string", "const": "1.0.0" },
+    "tenantId": { "type": "string", "minLength": 1 },
+    "targetScope": {
+      "type": "object",
+      "required": ["agentIds", "minOpenBotVersion"],
+      "properties": {
+        "agentIds": { "type": "array", "items": { "type": "string" } },
+        "minOpenBotVersion": { "type": "string", "minLength": 1 },
+        "maxOpenBotVersion": { "type": "string" }
+      }
+    },
+    "sourceExperimentId": { "type": "string", "minLength": 1 },
+    "evaluationReportRef": { "type": "string", "minLength": 1 },
+    "datasetVersion": { "type": "string", "minLength": 1 },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "issuedAt": { "type": "string", "format": "date-time" },
+    "expiresAt": { "type": "string", "format": "date-time" },
+    "rollbackTargetArtifactId": { "type": ["string", "null"] },
+    "contentHash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "signature": { "type": "string", "minLength": 1 },
+    "signatureAlgorithm": { "type": "string", "const": "Ed25519" },
+    "keyId": { "type": "string", "minLength": 1 },
+    "issuer": { "type": "string", "minLength": 1 },
+    "approvalPolicy": { "type": "string", "enum": ["human_required", "policy_gate"] },
+    "revocationStatus": { "type": "string", "enum": ["active", "revoked"] },
+    "monotonicEpoch": { "type": "integer", "minimum": 1 },
+    "payload": { "type": "object" }
+  }
+}

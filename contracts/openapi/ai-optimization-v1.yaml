@@ -1,0 +1,87 @@
+openapi: 3.1.0
+info:
+  title: AI Optimization Platform API
+  version: 1.0.0
+  description: Evaluation, Experimentation & Optimization Artifact Platform API (Dual-Plane Boundary Compliant)
+paths:
+  /v1/telemetry/events:
+    post:
+      summary: Ingest asynchronous redacted telemetry events from OpenBot
+      security: [{ bearerAuth: [] }]
+      responses:
+        "202": { description: Accepted (idempotent) }
+        "400": { description: Invalid schema or unredacted sensitive payload }
+        "403": { description: Tenant authorization mismatch }
+  /v1/datasets:
+    post:
+      summary: Create tenant-scoped dataset
+      security: [{ bearerAuth: [] }]
+      responses:
+        "201": { description: Created }
+  /v1/datasets/{datasetId}/versions:
+    post:
+      summary: Publish immutable DatasetVersion
+      security: [{ bearerAuth: [] }]
+      responses:
+        "201": { description: Immutable version published }
+        "409": { description: Contamination detected or version conflict }
+  /v1/evaluations/jobs:
+    post:
+      summary: Create evaluation job (Rule + LLM-as-a-Judge)
+      security: [{ bearerAuth: [] }]
+      responses:
+        "202": { description: Queued }
+  /v1/evaluations/{evaluationId}:
+    get:
+      summary: Get evaluation result with evidence & sourceCategory
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200": { description: EvaluationResult }
+  /v1/experiments:
+    post:
+      summary: Create experiment run with statistical power & stopping rules
+      security: [{ bearerAuth: [] }]
+      responses:
+        "201": { description: Created }
+  /v1/artifacts:
+    post:
+      summary: Register and Ed25519-sign an OptimizationArtifact
+      security: [{ bearerAuth: [] }]
+      responses:
+        "201": { description: Signed artifact created }
+  /v1/artifacts/{artifactId}:
+    get:
+      summary: Get artifact metadata
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200": { description: OptimizationArtifact metadata }
+  /v1/artifacts/{artifactId}/bundle:
+    get:
+      summary: Fetch signed artifact bundle for OpenBot verification
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200": { description: Signed bundle }
+        "410": { description: Artifact revoked or expired }
+  /v1/artifacts/{artifactId}/release-requests:
+    post:
+      summary: Create release recommendation request for OpenBot governance approval
+      security: [{ bearerAuth: [] }]
+      responses:
+        "201": { description: ReleaseRequest created }
+  /v1/artifacts/{artifactId}/revocations:
+    post:
+      summary: Revoke an OptimizationArtifact and notify OpenBot
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200": { description: Artifact revoked }
+  /v1/release-requests/{requestId}:
+    get:
+      summary: Query release request status
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200": { description: ReleaseRequest status }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer

@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openbot.love/schemas/ai-optimization/v1/experiment-run.schema.json",
+  "title": "ExperimentRun",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "experimentId",
+    "tenantId",
+    "experimentType",
+    "baselineVersion",
+    "candidateVersion",
+    "randomizationUnit",
+    "allocationRatio",
+    "sampleSizeTarget",
+    "sampleSizeActual",
+    "minimumDetectableEffect",
+    "confidenceLevel",
+    "statisticalPower",
+    "primaryMetric",
+    "guardrailMetrics",
+    "stoppingRule",
+    "multipleComparisonPolicy",
+    "contaminationCheck",
+    "experimentStatus",
+    "conclusion"
+  ],
+  "properties": {
+    "experimentId": { "type": "string", "minLength": 1 },
+    "tenantId": { "type": "string", "minLength": 1 },
+    "experimentType": {
+      "type": "string",
+      "enum": ["offline_benchmark", "fixed_dataset_eval", "shadow", "online_ab", "bandit"]
+    },
+    "baselineVersion": { "type": "string", "minLength": 1 },
+    "candidateVersion": { "type": "string", "minLength": 1 },
+    "randomizationUnit": { "type": "string", "enum": ["case_id", "run_id", "session_id", "tenant_id"] },
+    "allocationRatio": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
+    "sampleSizeTarget": { "type": "integer", "minimum": 1 },
+    "sampleSizeActual": { "type": "integer", "minimum": 0 },
+    "minimumDetectableEffect": { "type": "number", "exclusiveMinimum": 0 },
+    "confidenceLevel": { "type": "number", "exclusiveMinimum": 0, "exclusiveMaximum": 1 },
+    "statisticalPower": { "type": "number", "exclusiveMinimum": 0, "exclusiveMaximum": 1 },
+    "primaryMetric": { "type": "string", "minLength": 1 },
+    "guardrailMetrics": { "type": "array", "items": { "type": "string" } },
+    "stoppingRule": { "type": "string", "minLength": 1 },
+    "multipleComparisonPolicy": { "type": "string", "enum": ["none", "bonferroni", "holm_bonferroni", "fdr_bh"] },
+    "contaminationCheck": { "type": "string", "enum": ["passed", "failed", "pending"] },
+    "experimentStatus": { "type": "string", "enum": ["planned", "running", "stopped_early", "completed"] },
+    "conclusion": { "type": "string", "enum": ["win", "loss", "inconclusive", "pending"] },
+    "pValue": { "type": ["number", "null"], "minimum": 0, "maximum": 1 }
+  }
+}

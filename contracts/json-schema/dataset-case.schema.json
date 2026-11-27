@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openbot.love/schemas/ai-optimization/v1/dataset-case.schema.json",
+  "title": "DatasetCase",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "caseId",
+    "datasetId",
+    "datasetVersion",
+    "tenantId",
+    "split",
+    "contentHash",
+    "inputSnapshotRef",
+    "labels",
+    "sourceAuthorization",
+    "redactionStatus",
+    "reviewStatus",
+    "createdAt"
+  ],
+  "properties": {
+    "caseId": { "type": "string", "minLength": 1 },
+    "datasetId": { "type": "string", "minLength": 1 },
+    "datasetVersion": { "type": "string", "minLength": 1 },
+    "tenantId": { "type": "string", "minLength": 1 },
+    "split": { "type": "string", "enum": ["golden", "evaluation", "train_candidate"] },
+    "contentHash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "inputSnapshotRef": { "type": "string", "minLength": 1 },
+    "referenceAnswerRef": { "type": ["string", "null"] },
+    "expectedToolTraceRef": { "type": ["string", "null"] },
+    "labels": {
+      "type": "object",
+      "additionalProperties": { "type": "string" }
+    },
+    "sourceRunId": { "type": ["string", "null"] },
+    "sourceAuthorization": {
+      "type": "object",
+      "required": ["authorized", "policyRef", "subjectId"],
+      "properties": {
+        "authorized": { "type": "boolean" },
+        "policyRef": { "type": "string", "minLength": 1 },
+        "subjectId": { "type": "string", "minLength": 1 },
+        "allowTrainingUse": { "type": "boolean", "default": false }
+      }
+    },
+    "redactionStatus": { "type": "string", "enum": ["redacted", "clean", "pending_review"] },
+    "reviewStatus": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+    "createdAt": { "type": "string", "format": "date-time" }
+  }
+}
