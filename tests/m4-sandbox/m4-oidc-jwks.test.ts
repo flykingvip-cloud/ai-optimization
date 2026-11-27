@@ -636,4 +636,80 @@ describe("M4-02 Hardened OIDC Discovery, JWKS Caching & Key Rotation", () => {
       /Unknown signing key id/,
     );
   });
+
+  it("rejects a JWKS document that reuses a kid with different key material and does not accept either key", async () => {
+    const first = generateKeyPairSync("ed25519");
+    const second = generateKeyPairSync("ed25519");
+    const unique = generateKeyPairSync("ed25519");
+    const keys = [
+      { ...first.publicKey.export({ format: "jwk" }), kid: "shared", use: "sig" },
+      { ...unique.publicKey.export({ format: "jwk" }), kid: "unique", use: "sig" },
+      { ...second.publicKey.export({ format: "jwk" }), kid: "shared", use: "sig", alg: "EdDSA" },
+    ];
+    const client = new OidcJwksClient({
+      issuerUrl: REMOTE_ISSUER,
+      expectedAudience: "ai-optimization",
+      allowedJwksHosts: ["idp.example.com"],
+      dnsLookupFn: publicDnsLookup(),
+      async fetchFn(input) {
+        const url = String(input);
+        if (url.includes("openid-configuration")) {
+          return new Response(
+            JSON.stringify({ issuer: REMOTE_ISSUER, jwks_uri: `${REMOTE_ISSUER}/jwks.json` }),
+            { status: 200 },
+          );
+        }
+        return new Response(JSON.stringify({ keys }), { status: 200 });
+      },
+    });
+
+    const pemFirst = first.privateKey.export({ type: "pkcs8", format: "pem" }).toString();
+    const pemSecond = second.privateKey.export({ type: "pkcs8", format: "pem" }).toString();
+    const pemUnique = unique.privateKey.export({ type: "pkcs8", format: "pem" }).toString();
+    await expectAuthError(
+      client.verifyAuthorization(`Bearer ${signEdDsa("shared", serviceClaims(REMOTE_ISSUER), pemFirst)}`),
+      "invalid_signature",
+      /duplicate kid values with conflicting key material/,
+    );
+    await expectAuthError(
+      client.verifyAuthorization(`Bearer ${signEdDsa("shared", serviceClaims(REMOTE_ISSUER), pemSecond)}`),
+      "invalid_signature",
+      /negative-cache|duplicate kid values with conflicting key material/,
+    );
+    await expectAuthError(
+      client.verifyAuthorization(`Bearer ${signEdDsa("unique", serviceClaims(REMOTE_ISSUER), pemUnique)}`),
+      "invalid_signature",
+      /negative-cache|duplicate kid values with conflicting key material/,
+    );
+  });
+
+  it("accepts duplicate JWKS entries that share a kid and identical key material", async () => {
+    const key = generateKeyPairSync("ed25519");
+    const jwk = { ...key.publicKey.export({ format: "jwk" }), kid: "same", use: "sig" };
+    const client = new OidcJwksClient({
+      issuerUrl: REMOTE_ISSUER,
+      expectedAudience: "ai-optimization",
+      allowedJwksHosts: ["idp.example.com"],
+      dnsLookupFn: publicDnsLookup(),
+      async fetchFn(input) {
+        const url = String(input);
+        if (url.includes("openid-configuration")) {
+          return new Response(
+            JSON.stringify({ issuer: REMOTE_ISSUER, jwks_uri: `${REMOTE_ISSUER}/jwks.json` }),
+            { status: 200 },
+          );
+        }
+        return new Response(JSON.stringify({ keys: [jwk, { ...jwk, alg: "EdDSA" }] }), { status: 200 });
+      },
+    });
+    const token = signEdDsa(
+      "same",
+      serviceClaims(REMOTE_ISSUER),
+      key.privateKey.export({ type: "pkcs8", format: "pem" }).toString(),
+    );
+    await expect(client.verifyAuthorization(`Bearer ${token}`)).resolves.toMatchObject({
+      tenantId: "tenant_sandbox",
+      subjectId: "svc_openbot_sandbox",
+    });
+  });
 });

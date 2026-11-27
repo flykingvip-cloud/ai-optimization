@@ -46,6 +46,14 @@ export interface OidcJwksOptions {
    * over HTTP or HTTPS for local tests. Never enable this in production.
    */
   readonly allowInsecureHttpForLocalhost?: boolean;
+  /**
+   * Optional transport hook, intended for tests. Validation of the URL,
+   * allowlist, and resolved addresses runs before this function is called,
+   * but the validated addresses are not bound to the socket. A custom
+   * `fetchFn` that ignores `redirect: "manual"`, performs its own DNS
+   * lookup, or connects to a different address is not IP-pinned. The
+   * default outbound path uses `pinnedFetch` and is not affected.
+   */
   readonly fetchFn?: typeof fetch;
   /** Optional DNS resolver hook so tests can assert address-level SSRF controls without network I/O. */
   readonly dnsLookupFn?: (hostname: string) => Promise<readonly string[]>;
@@ -617,14 +625,31 @@ export class OidcJwksClient {
           throw new AuthError("invalid_signature", "JWKS keys must be an array");
         }
         const nextKeys: Record<string, string> = {};
+        const conflictingKids = new Set<string>();
         for (const jwk of jwks.keys) {
           if (!isAllowedSigningJwk(jwk) || !jwk.kid) continue;
           try {
             const keyObj = createPublicKey({ key: jwk, format: "jwk" });
-            nextKeys[jwk.kid] = keyObj.export({ type: "spki", format: "pem" }).toString();
+            const pem = keyObj.export({ type: "spki", format: "pem" }).toString();
+            const existing = nextKeys[jwk.kid];
+            if (existing !== undefined && existing !== pem) {
+              // Fail closed: the same kid must not map to two materials.
+              conflictingKids.add(jwk.kid);
+              delete nextKeys[jwk.kid];
+              continue;
+            }
+            if (!conflictingKids.has(jwk.kid)) {
+              nextKeys[jwk.kid] = pem;
+            }
           } catch {
             // Skip malformed or unsupported JWK material; do not fail the whole document.
           }
+        }
+        if (conflictingKids.size > 0) {
+          throw new AuthError(
+            "invalid_signature",
+            "JWKS contained duplicate kid values with conflicting key material",
+          );
         }
         if (Object.keys(nextKeys).length === 0) {
           throw new AuthError("invalid_signature", "JWKS contained no usable signing keys");
