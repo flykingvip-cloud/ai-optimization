@@ -166,8 +166,10 @@ describe("Phase 1 Core Platform Verification", () => {
     expect(
       registry.verifyForOpenBot(artifact, {
         expectedTenantId: "tenant_a",
+        targetAgentId: "bot_1",
         openBotVersion: "2026.11.1",
         lastAppliedEpoch: 4,
+        hasHumanApproval: true,
         nowIso: "2026-11-28T00:00:00Z",
       }),
     ).toEqual({ valid: true });
@@ -175,8 +177,10 @@ describe("Phase 1 Core Platform Verification", () => {
     expect(
       registry.verifyForOpenBot(artifact, {
         expectedTenantId: "tenant_a",
+        targetAgentId: "bot_1",
         openBotVersion: "2026.11.1",
         lastAppliedEpoch: 5,
+        hasHumanApproval: true,
         nowIso: "2026-11-28T00:00:00Z",
       }),
     ).toEqual({ valid: false, reason: "replay_detected" });
@@ -184,8 +188,10 @@ describe("Phase 1 Core Platform Verification", () => {
     expect(
       registry.verifyForOpenBot(artifact, {
         expectedTenantId: "tenant_a",
+        targetAgentId: "bot_1",
         openBotVersion: "2026.11.1",
         lastAppliedEpoch: 4,
+        hasHumanApproval: true,
         nowIso: "2027-01-01T00:00:00Z",
       }),
     ).toEqual({ valid: false, reason: "expired" });
@@ -194,8 +200,10 @@ describe("Phase 1 Core Platform Verification", () => {
     expect(
       registry.verifyForOpenBot(artifact, {
         expectedTenantId: "tenant_a",
+        targetAgentId: "bot_1",
         openBotVersion: "2026.11.1",
         lastAppliedEpoch: 4,
+        hasHumanApproval: true,
         nowIso: "2026-11-28T00:00:00Z",
       }),
     ).toEqual({ valid: false, reason: "revoked" });

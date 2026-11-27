@@ -4,6 +4,7 @@ import type {
   DatasetCase,
   DatasetSplit,
 } from "../../../packages/shared-contracts/src/index.js";
+import { scanForSecretsAndPii, type ScanReport } from "./scanner.js";
 
 export interface DatasetVersionRecord {
   readonly datasetId: string;
@@ -12,6 +13,7 @@ export interface DatasetVersionRecord {
   readonly split: DatasetSplit;
   readonly contentHash: string;
   readonly cases: readonly DatasetCase[];
+  readonly scanReports: readonly ScanReport[];
   readonly createdAt: string;
 }
 
@@ -22,6 +24,7 @@ export class DatasetGovernanceError extends Error {
       | "version_immutable"
       | "unauthorized_source"
       | "unredacted_case"
+      | "pii_or_secret_detected"
       | "contamination_detected"
       | "not_found",
     message: string,
@@ -44,7 +47,7 @@ export class DatasetManagementService {
       datasetId: string;
       version: string;
       split: DatasetSplit;
-      cases: readonly DatasetCase[];
+      cases: readonly (DatasetCase & { readonly contentPayload?: unknown })[];
       nowIso?: string;
     },
   ): DatasetVersionRecord {
@@ -57,6 +60,7 @@ export class DatasetManagementService {
     }
 
     const goldenHashes = this.goldenHashesByTenant.get(auth.tenantId) ?? new Set<string>();
+    const scanReports: ScanReport[] = [];
 
     for (const c of params.cases) {
       if (c.tenantId !== auth.tenantId) {
@@ -67,6 +71,14 @@ export class DatasetManagementService {
       }
       if (c.redactionStatus === "pending_review") {
         throw new DatasetGovernanceError("unredacted_case", `Case ${c.caseId} is not redacted`);
+      }
+      const scan = scanForSecretsAndPii(c);
+      scanReports.push(scan);
+      if (scan.riskLevel === "high") {
+        throw new DatasetGovernanceError(
+          "pii_or_secret_detected",
+          `Case ${c.caseId} blocked by active scanner: ${scan.findings.join(", ")}`,
+        );
       }
       if (params.split === "train_candidate" && goldenHashes.has(c.contentHash)) {
         throw new DatasetGovernanceError(
@@ -93,7 +105,8 @@ export class DatasetManagementService {
       tenantId: auth.tenantId,
       split: params.split,
       contentHash,
-      cases: [...params.cases],
+      cases: params.cases.map(({ contentPayload: _ignored, ...rest }) => rest),
+      scanReports,
       createdAt: params.nowIso ?? new Date().toISOString(),
     };
     this.versions.set(key, record);

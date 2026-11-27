@@ -18,5 +18,15 @@ jobs:
           node-version: "22"
           cache: "pnpm"
       - run: pnpm install --frozen-lockfile || pnpm install
-      - run: pnpm run typecheck
-      - run: pnpm run test
+      - name: TypeScript typecheck
+        run: pnpm run typecheck
+      - name: Contract, Security, Resilience, Persistence & Unit Tests
+        run: pnpm run test
+      - name: Dependency vulnerability audit (high/critical gate)
+        run: pnpm audit --audit-level=high
+      - name: Secret scanning check (no committed credentials)
+        run: |
+          if grep -rnE "sk-[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16}|-----BEGIN (RSA|EC|OPENSSH) PRIVATE KEY-----" packages/ services/ contracts/ docs/; then
+            echo "Potential secret detected!"
+            exit 1
+          fi

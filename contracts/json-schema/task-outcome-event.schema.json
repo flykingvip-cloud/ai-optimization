@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openbot.love/schemas/ai-optimization/v1/task-outcome-event.schema.json",
+  "title": "TaskOutcomeEvent",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "eventId",
+    "idempotencyKey",
+    "tenantId",
+    "taskId",
+    "runId",
+    "outcomeVersion",
+    "lifecycle",
+    "taskJudgement",
+    "decidedAt"
+  ],
+  "properties": {
+    "schemaVersion": { "type": "string", "const": "1.0.0" },
+    "eventId": { "type": "string", "minLength": 1 },
+    "idempotencyKey": { "type": "string", "minLength": 1 },
+    "tenantId": { "type": "string", "minLength": 1 },
+    "taskId": { "type": "string", "minLength": 1 },
+    "runId": { "type": "string", "minLength": 1 },
+    "outcomeVersion": { "type": "integer", "minimum": 1 },
+    "lifecycle": {
+      "type": "string",
+      "enum": ["active", "awaiting_acceptance", "awaiting_delivery", "recovering", "closed"]
+    },
+    "taskJudgement": {
+      "type": "string",
+      "enum": ["success", "failure", "cancelled", "incomplete"]
+    },
+    "decidedAt": { "type": "string", "format": "date-time" }
+  }
+}
