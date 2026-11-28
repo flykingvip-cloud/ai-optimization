@@ -7,9 +7,11 @@ import { afterEach, describe, expect, it } from "vitest";
 import type { TelemetryEvent } from "../../packages/shared-contracts/src/index.js";
 import {
   BoundedTelemetryClient,
+  TelemetryWalInitError,
   TelemetryWalLockError,
   type WalPersistStage,
 } from "../../packages/telemetry-sdk/src/index.js";
+import { ExclusiveWalLock } from "../../packages/telemetry-sdk/src/wal-lock.js";
 
 const CHILD_PATH = fileURLToPath(new URL("./helpers/telemetry-wal-crash-child.ts", import.meta.url));
 const CHILD_REGISTER_PATH = fileURLToPath(new URL("./helpers/ts-from-js-register.mjs", import.meta.url));
@@ -323,10 +325,24 @@ describe("P0-2 Telemetry WAL crash recovery, lock, leftover tmp, and flush clean
 
   it("evicts oldest events under maxWalBytes and records drop metrics plus audit info", () => {
     const { walPath } = newWalDir();
+    const probe = track(
+      new BoundedTelemetryClient({
+        walFilePath: walPath,
+        transport: { async send() {} },
+      }),
+    );
+    probe.enqueue(makeEvent("evt_evict_0"));
+    const oneEventBytes = probe.getMetrics().walBytes;
+    probe.close();
+    fs.rmSync(walPath, { force: true });
+    fs.rmSync(`${walPath}.lock`, { force: true });
+    expect(oneEventBytes).toBeGreaterThan(0);
+
     const client = track(
       new BoundedTelemetryClient({
         walFilePath: walPath,
-        maxWalBytes: 400,
+        // Fit one pending event but not two, so later enqueues evict the oldest pending.
+        maxWalBytes: oneEventBytes + 32,
         transport: { async send() {} },
       }),
     );
@@ -337,7 +353,7 @@ describe("P0-2 Telemetry WAL crash recovery, lock, leftover tmp, and flush clean
     expect(metrics.droppedCount).toBeGreaterThanOrEqual(1);
     expect(metrics.droppedByMaxWalBytes).toBeGreaterThanOrEqual(1);
     expect(metrics.droppedByMaxWalBytes).toBe(metrics.droppedCount);
-    expect(metrics.walBytes).toBeLessThanOrEqual(400);
+    expect(metrics.walBytes).toBeLessThanOrEqual(oneEventBytes + 32);
     expect(metrics.recentDrops.length).toBeGreaterThanOrEqual(1);
     expect(metrics.recentDrops.every((d) => d.reason === "max_wal_bytes")).toBe(true);
     expect(metrics.recentDrops.every((d) => d.eventId.startsWith("evt_evict_"))).toBe(true);
@@ -492,5 +508,188 @@ describe("P0-2 Telemetry WAL crash recovery, lock, leftover tmp, and flush clean
     await client.flush();
     expect(sent).toEqual(["evt_in_flight", "evt_during_send"]);
     expect(fs.existsSync(walPath)).toBe(false);
+  });
+
+  it("overlapping flushes keep all unconfirmed events in the WAL snapshot and recoverable after close", async () => {
+    const { walPath } = newWalDir();
+    let releaseFirstSend: (() => void) | undefined;
+    const firstSendGate = new Promise<void>((resolve) => {
+      releaseFirstSend = resolve;
+    });
+    let sendStarts = 0;
+    const sent: string[] = [];
+    const client = track(
+      new BoundedTelemetryClient({
+        walFilePath: walPath,
+        transport: {
+          async send(batch) {
+            sendStarts += 1;
+            if (sendStarts === 1) {
+              await firstSendGate;
+            }
+            sent.push(...batch.map((e) => e.eventId));
+          },
+        },
+      }),
+    );
+    client.enqueue(makeEvent("evt_flush_a"));
+    const flush1 = client.flush();
+    const startedAt = Date.now();
+    while (sendStarts < 1) {
+      if (Date.now() - startedAt > 5_000) {
+        throw new Error("first transport.send did not start");
+      }
+      await new Promise((r) => setTimeout(r, 5));
+    }
+    client.enqueue(makeEvent("evt_flush_b"));
+    const flush2 = client.flush();
+    client.enqueue(makeEvent("evt_flush_c"));
+    expect(eventIdsFromWal(walPath)).toEqual(["evt_flush_a", "evt_flush_b", "evt_flush_c"]);
+    expect(client.getMetrics().inFlightCount).toBe(1);
+    expect(client.getMetrics().queuedCount).toBe(2);
+
+    // Release the lock without completing send so a successor can recover the snapshot.
+    client.close();
+    const recovered = track(
+      new BoundedTelemetryClient({
+        walFilePath: walPath,
+        transport: { async send() {} },
+      }),
+    );
+    expect(recovered.getMetrics().queuedCount).toBe(3);
+    recovered.close();
+
+    releaseFirstSend?.();
+    await flush1;
+    await flush2;
+    // The original client was closed before cleanup, so recovery still sees the unconfirmed set.
+    expect(eventIdsFromWal(walPath)).toEqual(["evt_flush_a", "evt_flush_b", "evt_flush_c"]);
+  });
+
+  it("does not evict unconfirmed in-flight events under WAL capacity pressure and refuses events that cannot fit", async () => {
+    const { walPath } = newWalDir();
+    let releaseSend: (() => void) | undefined;
+    const sendGate = new Promise<void>((resolve) => {
+      releaseSend = resolve;
+    });
+    let sendStarted = false;
+    const probe = track(
+      new BoundedTelemetryClient({
+        walFilePath: walPath,
+        transport: { async send() {} },
+      }),
+    );
+    probe.enqueue(makeEvent("evt_size_probe"));
+    const inFlightBytes = probe.getMetrics().walBytes;
+    probe.close();
+    fs.rmSync(walPath, { force: true });
+    fs.rmSync(`${walPath}.lock`, { force: true });
+    expect(inFlightBytes).toBeGreaterThan(0);
+
+    const client = track(
+      new BoundedTelemetryClient({
+        walFilePath: walPath,
+        maxWalBytes: inFlightBytes + 32,
+        transport: {
+          async send() {
+            sendStarted = true;
+            await sendGate;
+          },
+        },
+      }),
+    );
+    expect(client.getMetrics().walStatus).toBe("enabled");
+    client.enqueue(makeEvent("evt_kept_in_flight"));
+    const flushDone = client.flush();
+    const startedAt = Date.now();
+    while (!sendStarted) {
+      if (Date.now() - startedAt > 5_000) {
+        throw new Error("transport.send did not start");
+      }
+      await new Promise((r) => setTimeout(r, 5));
+    }
+    expect(eventIdsFromWal(walPath)).toEqual(["evt_kept_in_flight"]);
+
+    client.enqueue(makeEvent("evt_cannot_fit"));
+    const metrics = client.getMetrics();
+    expect(metrics.droppedByWalCapacityRefused).toBe(1);
+    expect(metrics.droppedCount).toBe(1);
+    expect(metrics.recentDrops.some((d) => d.reason === "wal_capacity_refused" && d.eventId === "evt_cannot_fit")).toBe(
+      true,
+    );
+    expect(eventIdsFromWal(walPath)).toEqual(["evt_kept_in_flight"]);
+    expect(eventIdsFromWal(walPath)).not.toContain("evt_cannot_fit");
+
+    client.close();
+    const recoveredEvents: string[] = [];
+    const recovered = track(
+      new BoundedTelemetryClient({
+        walFilePath: walPath,
+        maxWalBytes: inFlightBytes + 32,
+        transport: {
+          async send(batch) {
+            recoveredEvents.push(...batch.map((e) => e.eventId));
+          },
+        },
+      }),
+    );
+    expect(recovered.getMetrics().queuedCount).toBe(1);
+    await recovered.flush();
+    expect(recoveredEvents).toEqual(["evt_kept_in_flight"]);
+    expect(recoveredEvents).not.toContain("evt_cannot_fit");
+    expect(fs.existsSync(walPath)).toBe(false);
+
+    releaseSend?.();
+    await flushDone;
+  });
+
+  it("treats an empty lock file as contention and does not unlink it", () => {
+    const { walPath } = newWalDir();
+    const lockPath = ExclusiveWalLock.lockPathFor(walPath);
+    fs.mkdirSync(path.dirname(lockPath), { recursive: true });
+    fs.writeFileSync(lockPath, "", "utf8");
+    expect(
+      () =>
+        new BoundedTelemetryClient({
+          walFilePath: walPath,
+          transport: { async send() {} },
+        }),
+    ).toThrow(TelemetryWalLockError);
+    expect(fs.existsSync(lockPath)).toBe(true);
+    expect(fs.readFileSync(lockPath, "utf8")).toBe("");
+  });
+
+  it("does not unlink a lock file that no longer belongs to the releasing holder", () => {
+    const { walPath } = newWalDir();
+    const acquired = ExclusiveWalLock.acquire(walPath);
+    if (!acquired.ok) {
+      throw new Error("expected to acquire lock");
+    }
+    const lockPath = acquired.lock.path;
+    const foreign = {
+      pid: 1,
+      starttime: "not-ours",
+      createdAt: "2026-11-28T00:00:00.000Z",
+    };
+    fs.writeFileSync(lockPath, `${JSON.stringify(foreign)}\n`, "utf8");
+    acquired.lock.close();
+    expect(fs.existsSync(lockPath)).toBe(true);
+    expect(JSON.parse(fs.readFileSync(lockPath, "utf8"))).toEqual(foreign);
+  });
+
+  it("fails closed with a distinct error when WAL initialization cannot be completed", () => {
+    expect(
+      () =>
+        new BoundedTelemetryClient({
+          walFilePath: "/dev/null/impossible/wal.jsonl",
+          transport: { async send() {} },
+        }),
+    ).toThrow(TelemetryWalInitError);
+    const memoryOnly = track(
+      new BoundedTelemetryClient({
+        transport: { async send() {} },
+      }),
+    );
+    expect(memoryOnly.getMetrics().walStatus).toBe("disabled");
   });
 }, 15_000);

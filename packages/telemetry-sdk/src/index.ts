@@ -5,6 +5,17 @@ import { ExclusiveWalLock, TelemetryWalLockError } from "./wal-lock.js";
 
 export { TelemetryWalLockError } from "./wal-lock.js";
 
+export class TelemetryWalInitError extends Error {
+  readonly code = "WAL_INIT_FAILED" as const;
+
+  constructor(message: string, options?: { cause?: unknown }) {
+    super(message, options);
+    this.name = "TelemetryWalInitError";
+  }
+}
+
+export type TelemetryWalStatus = "disabled" | "enabled";
+
 export const REDACTION_POLICY_VERSION = "1.1.0";
 
 const ALLOWED_PAYLOAD_FIELDS = new Set([
@@ -38,7 +49,7 @@ const SECRET_PATTERNS: ReadonlyArray<{ pattern: RegExp; replacement: string }> =
 
 const MAX_DROP_AUDIT = 32;
 
-export type TelemetryDropReason = "max_queue_items" | "max_wal_bytes" | "enqueue_error";
+export type TelemetryDropReason = "max_queue_items" | "max_wal_bytes" | "wal_capacity_refused" | "enqueue_error";
 
 export interface TelemetryDropAudit {
   readonly reason: TelemetryDropReason;
@@ -108,9 +119,12 @@ export interface TelemetryClientMetrics {
   readonly exportErrorCount: number;
   readonly exportedCount: number;
   readonly walWriteErrorCount: number;
+  readonly droppedByWalCapacityRefused: number;
   readonly walDirFsyncCount: number;
   readonly walDirFsyncErrorCount: number;
   readonly walBytes: number;
+  readonly walStatus: TelemetryWalStatus;
+  readonly inFlightCount: number;
   readonly recentDrops: readonly TelemetryDropAudit[];
 }
 
@@ -129,15 +143,24 @@ export interface TelemetryClientMetrics {
  * - After rename or unlink, the parent directory is fsynced when the OS
  *   supports it. This is a durability *intent* for power loss of the directory
  *   entry; it is not evidence that a real power cut was tested.
- * - flush() does not clear the WAL before transport.send succeeds. After
- *   success, the remaining queue is durably persisted, or the WAL is unlinked
- *   if empty. A crash after send and before that cleanup may replay events
+ * - flush() is serialized. Concurrent flush() calls wait in line; a waiting
+ *   flush only sends what remains in the pending queue after the prior flush
+ *   finishes. Unconfirmed in-flight events stay in the durable snapshot until
+ *   send succeeds (or they are re-queued after failure). After success, the
+ *   remaining queue is durably persisted, or the WAL is unlinked if empty.
+ *   A crash after send and before that cleanup may replay events
  *   (at-least-once). Consumers must treat idempotencyKey as the idempotency
  *   key. This client does not provide exactly-once delivery.
+ * - Capacity eviction never deletes unconfirmed in-flight events. Pending
+ *   (not-yet-sent) queue events may be evicted under maxWalBytes. A new event
+ *   that cannot fit alongside the unconfirmed in-flight set is refused and
+ *   audited; the in-flight set is left intact.
  *
  * Concurrency: one writer per walFilePath. A second live client is refused
- * with TelemetryWalLockError. close() releases the lock; a leftover lock after
- * SIGKILL is treated as stale once the holder is no longer alive.
+ * with TelemetryWalLockError. If walFilePath is set but initialization fails,
+ * construction throws TelemetryWalInitError (fail-closed) instead of running
+ * with persistence silently disabled. close() releases the lock; a leftover
+ * lock after SIGKILL is treated as stale once the holder is no longer alive.
  */
 export class BoundedTelemetryClient {
   private readonly maxQueueItems: number;
@@ -150,6 +173,7 @@ export class BoundedTelemetryClient {
   private droppedCount = 0;
   private droppedByMaxQueueItems = 0;
   private droppedByMaxWalBytes = 0;
+  private droppedByWalCapacityRefused = 0;
   private droppedByEnqueueError = 0;
   private exportErrorCount = 0;
   private exportedCount = 0;
@@ -159,8 +183,9 @@ export class BoundedTelemetryClient {
   private walLock: ExclusiveWalLock | undefined;
   private walEnabled = false;
   private closed = false;
-  /** Events handed to transport.send but not yet acknowledged. Included in WAL snapshots until success or re-queue. */
-  private inFlightBatch: TelemetryEvent[] | undefined;
+  /** Unconfirmed batches handed to transport.send. Included in WAL snapshots until success or re-queue. */
+  private readonly inFlightBatches: TelemetryEvent[][] = [];
+  private flushChain: Promise<void> = Promise.resolve();
 
   constructor(options: TelemetryClientOptions) {
     this.maxQueueItems = Math.max(1, options.maxQueueItems ?? 10_000);
@@ -183,15 +208,25 @@ export class BoundedTelemetryClient {
       if (acquired.reason === "contended") {
         throw acquired.error;
       }
-      return;
+      throw new TelemetryWalInitError(
+        `WAL initialization failed for "${this.walFilePath}": persistence is not enabled`,
+        { cause: acquired.error },
+      );
     }
     this.walLock = acquired.lock;
-    this.walEnabled = true;
     try {
       this.reconcileLeftoverTmps();
       this.recoverFromWal();
-    } catch {
+      this.walEnabled = true;
+    } catch (error) {
       this.walWriteErrorCount += 1;
+      this.walEnabled = false;
+      this.walLock = undefined;
+      acquired.lock.close();
+      throw new TelemetryWalInitError(
+        `WAL initialization failed for "${this.walFilePath}": persistence is not enabled`,
+        { cause: error },
+      );
     }
   }
 
@@ -320,21 +355,27 @@ export class BoundedTelemetryClient {
     }
   }
 
+  private inFlightEvents(): TelemetryEvent[] {
+    const events: TelemetryEvent[] = [];
+    for (const batch of this.inFlightBatches) {
+      events.push(...batch);
+    }
+    return events;
+  }
+
   private persistableEvents(): TelemetryEvent[] {
-    return this.inFlightBatch && this.inFlightBatch.length > 0
-      ? this.inFlightBatch.concat(this.queue)
-      : this.queue;
+    return this.inFlightEvents().concat(this.queue);
   }
 
   private evictUntilWithinWalBudget(): string {
-    let events = this.persistableEvents();
-    let content = this.serializeEvents(events);
-    while (events.length > 0 && Buffer.byteLength(content, "utf8") > this.maxWalBytes) {
-      const evicted =
-        this.inFlightBatch && this.inFlightBatch.length > 0 ? this.inFlightBatch.shift() : this.queue.shift();
+    // Never evict unconfirmed in-flight events to make room. Only pending
+    // (not-yet-sent) queue events are droppable under maxWalBytes. If the
+    // snapshot is still over budget, the remainder is in-flight and is kept.
+    let content = this.serializeEvents(this.persistableEvents());
+    while (this.queue.length > 0 && Buffer.byteLength(content, "utf8") > this.maxWalBytes) {
+      const evicted = this.queue.shift();
       this.recordDrop("max_wal_bytes", evicted);
-      events = this.persistableEvents();
-      content = this.serializeEvents(events);
+      content = this.serializeEvents(this.persistableEvents());
     }
     return content;
   }
@@ -408,6 +449,8 @@ export class BoundedTelemetryClient {
       this.droppedByMaxQueueItems += 1;
     } else if (reason === "max_wal_bytes") {
       this.droppedByMaxWalBytes += 1;
+    } else if (reason === "wal_capacity_refused") {
+      this.droppedByWalCapacityRefused += 1;
     } else {
       this.droppedByEnqueueError += 1;
     }
@@ -437,6 +480,12 @@ export class BoundedTelemetryClient {
         const evicted = this.queue.shift();
         this.recordDrop("max_queue_items", evicted);
       }
+      const inFlightPlusNew = this.serializeEvents([...this.inFlightEvents(), sanitized]);
+      if (Buffer.byteLength(inFlightPlusNew, "utf8") > this.maxWalBytes) {
+        // Cannot fit this event without deleting unconfirmed in-flight data.
+        this.recordDrop("wal_capacity_refused", sanitized);
+        return;
+      }
       this.queue.push(sanitized);
       this.persistWalAtomic();
     } catch {
@@ -445,24 +494,32 @@ export class BoundedTelemetryClient {
   }
 
   async flush(): Promise<void> {
-    if (this.queue.length === 0) {
+    const run = this.flushChain.then(() => this.flushSerialized());
+    this.flushChain = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    return run;
+  }
+
+  private async flushSerialized(): Promise<void> {
+    if (this.closed || this.queue.length === 0) {
       return;
     }
     const batch = this.queue.splice(0, this.queue.length);
-    this.inFlightBatch = batch;
+    this.inFlightBatches.push(batch);
     try {
       await this.transport.send(batch);
       this.invokeHook("afterTransportSend");
       this.exportedCount += batch.length;
-      this.inFlightBatch = undefined;
+      this.removeInFlightBatch(batch);
       // Persist only after send succeeds. Remaining queue may contain events
-      // enqueued during send; persist (or unlink) that snapshot. The in-flight
-      // batch stays in WAL snapshots until this point so a concurrent enqueue
-      // cannot drop unacknowledged events from disk.
+      // enqueued during send; persist (or unlink) that snapshot. Unconfirmed
+      // in-flight events stay in WAL snapshots until this point.
       this.persistWalAtomic();
     } catch {
       this.exportErrorCount += 1;
-      this.inFlightBatch = undefined;
+      this.removeInFlightBatch(batch);
       for (const evt of batch) {
         if (this.queue.length >= this.maxQueueItems) {
           const evicted = this.queue.shift();
@@ -471,6 +528,13 @@ export class BoundedTelemetryClient {
         this.queue.push(evt);
       }
       this.persistWalAtomic();
+    }
+  }
+
+  private removeInFlightBatch(batch: TelemetryEvent[]): void {
+    const idx = this.inFlightBatches.indexOf(batch);
+    if (idx >= 0) {
+      this.inFlightBatches.splice(idx, 1);
     }
   }
 
@@ -503,6 +567,7 @@ export class BoundedTelemetryClient {
       droppedCount: this.droppedCount,
       droppedByMaxQueueItems: this.droppedByMaxQueueItems,
       droppedByMaxWalBytes: this.droppedByMaxWalBytes,
+      droppedByWalCapacityRefused: this.droppedByWalCapacityRefused,
       droppedByEnqueueError: this.droppedByEnqueueError,
       exportErrorCount: this.exportErrorCount,
       exportedCount: this.exportedCount,
@@ -510,6 +575,8 @@ export class BoundedTelemetryClient {
       walDirFsyncCount: this.walDirFsyncCount,
       walDirFsyncErrorCount: this.walDirFsyncErrorCount,
       walBytes,
+      walStatus: this.walEnabled ? "enabled" : "disabled",
+      inFlightCount: this.inFlightEvents().length,
       recentDrops: this.dropAudit.slice(),
     };
   }

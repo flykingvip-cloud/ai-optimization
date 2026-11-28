@@ -26,18 +26,25 @@ interface LockPayload {
  *
  * This is a cooperating lockfile protocol (O_EXCL create + pid/starttime liveness),
  * not a kernel flock/fcntl lock. A process that ignores the protocol can still
- * write the WAL. The lock file is released by close(), and a leftover lock after
- * SIGKILL is treated as stale once the holder pid is no longer alive with the
- * recorded starttime. On Linux, starttime is read from /proc to mitigate pid reuse.
+ * write the WAL. close() unlinks the lock file only after confirming it still
+ * belongs to this holder (pid + starttime). A leftover lock after SIGKILL is
+ * treated as stale once the holder pid is no longer alive with the recorded
+ * starttime. An empty lock file is treated as initialization contention, not
+ * as stale, and is not unlinked; that avoids a dual-writer window if the
+ * creator is descheduled after O_EXCL and before writing the payload. A crash
+ * in that window can leave a sticky empty lock that later acquirers refuse
+ * (fail-closed). On Linux, starttime is read from /proc to mitigate pid reuse.
  * This helper does not claim power-loss durability for the lock file itself.
  */
 export class ExclusiveWalLock {
   private readonly lockPath: string;
+  private readonly payload: LockPayload;
   private fd: number | undefined;
   private released = false;
 
-  private constructor(lockPath: string, fd: number) {
+  private constructor(lockPath: string, fd: number, payload: LockPayload) {
     this.lockPath = lockPath;
+    this.payload = payload;
     this.fd = fd;
   }
 
@@ -64,6 +71,7 @@ export class ExclusiveWalLock {
           };
           fs.writeSync(fd, `${JSON.stringify(payload)}\n`, 0, "utf8");
           fs.fsyncSync(fd);
+          return { ok: true, lock: new ExclusiveWalLock(lockPath, fd, payload) };
         } catch (error) {
           try {
             fs.closeSync(fd);
@@ -77,7 +85,6 @@ export class ExclusiveWalLock {
           }
           return { ok: false, reason: "io_error", error };
         }
-        return { ok: true, lock: new ExclusiveWalLock(lockPath, fd) };
       } catch (error) {
         const code = (error as NodeJS.ErrnoException).code;
         if (code !== "EEXIST") {
@@ -85,16 +92,20 @@ export class ExclusiveWalLock {
         }
 
         const existing = readLockPayloadWithRetry(lockPath);
-        if (existing === "unreadable") {
+        if (existing === "missing") {
+          continue;
+        }
+        if (existing === "empty" || existing === "unreadable") {
+          // Empty means another holder may still be initializing. Do not unlink.
           return {
             ok: false,
             reason: "contended",
             error: new TelemetryWalLockError(
-              `Refusing to open WAL "${walFilePath}": lock file ${lockPath} exists but is unreadable`,
+              `Refusing to open WAL "${walFilePath}": lock file ${lockPath} exists but is ${existing}`,
             ),
           };
         }
-        if (existing === "empty" || (existing && !isHolderAlive(existing))) {
+        if (!isHolderAlive(existing)) {
           try {
             fs.unlinkSync(lockPath);
             continue;
@@ -106,12 +117,11 @@ export class ExclusiveWalLock {
             return { ok: false, reason: "io_error", error: unlinkError };
           }
         }
-        const holder = existing ? `pid ${existing.pid}` : "another holder";
         return {
           ok: false,
           reason: "contended",
           error: new TelemetryWalLockError(
-            `Refusing to open WAL "${walFilePath}": already locked by ${holder}`,
+            `Refusing to open WAL "${walFilePath}": already locked by pid ${existing.pid}`,
           ),
         };
       }
@@ -133,27 +143,43 @@ export class ExclusiveWalLock {
       return;
     }
     this.released = true;
+    const stillOurs = this.lockFileStillBelongsToHolder();
     const fd = this.fd;
     this.fd = undefined;
     if (fd !== undefined) {
       try {
         fs.closeSync(fd);
       } catch {
-        // still attempt unlink so a later process can acquire
+        // ignore close errors; unlink is gated on ownership below
       }
+    }
+    if (!stillOurs) {
+      return;
     }
     try {
       fs.unlinkSync(this.lockPath);
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
-        // Leave a lock file only if unlink failed for a reason other than already gone.
-        // The next acquirer will treat a dead pid as stale.
+        // Leave the file if unlink failed for a reason other than already gone.
       }
+    }
+  }
+
+  private lockFileStillBelongsToHolder(): boolean {
+    try {
+      const raw = fs.readFileSync(this.lockPath, "utf8").trim();
+      if (raw.length === 0) {
+        return false;
+      }
+      const parsed = JSON.parse(raw.split("\n")[0]!) as Partial<LockPayload>;
+      return parsed.pid === this.payload.pid && (parsed.starttime ?? "") === this.payload.starttime;
+    } catch {
+      return false;
     }
   }
 }
 
-function readLockPayloadWithRetry(lockPath: string): LockPayload | "empty" | "unreadable" {
+function readLockPayloadWithRetry(lockPath: string): LockPayload | "empty" | "missing" | "unreadable" {
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
       const raw = fs.readFileSync(lockPath, "utf8").trim();
@@ -175,7 +201,7 @@ function readLockPayloadWithRetry(lockPath: string): LockPayload | "empty" | "un
       };
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-        return "empty";
+        return "missing";
       }
       if (attempt < 2) {
         busyWait(10);

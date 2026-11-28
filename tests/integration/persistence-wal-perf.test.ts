@@ -4,7 +4,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { CORE_MIGRATIONS, OptimizationDatabase } from "../../packages/shared-contracts/src/db.js";
 import type { TelemetryEvent } from "../../packages/shared-contracts/src/index.js";
-import { BoundedTelemetryClient } from "../../packages/telemetry-sdk/src/index.js";
+import { BoundedTelemetryClient, TelemetryWalInitError } from "../../packages/telemetry-sdk/src/index.js";
 
 describe("P1-01/02/04 Persistence, Migrations, Disk WAL & Performance", () => {
   it("P1-01 executes SQLite migrations, persists across reopen, rolls back, and handles failed migration atomically", () => {
@@ -37,7 +37,7 @@ describe("P1-01/02/04 Persistence, Migrations, Disk WAL & Performance", () => {
     db2.close();
   });
 
-  it("P1-02 recovers Telemetry events from disk WAL after restart and survives unwritable WAL path", async () => {
+  it("P1-02 recovers Telemetry events from disk WAL after restart and fails closed on unwritable WAL path", async () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "ai-opt-wal-"));
     const walPath = path.join(tmpDir, "telemetry.wal.jsonl");
     const evt: TelemetryEvent = {
@@ -79,12 +79,13 @@ describe("P1-01/02/04 Persistence, Migrations, Disk WAL & Performance", () => {
     expect(recovered).toHaveLength(1);
     expect(recovered[0]!.eventId).toBe("e_wal_1");
 
-    const brokenClient = new BoundedTelemetryClient({
-      walFilePath: "/dev/null/impossible/wal.jsonl",
-      transport: { async send() {} },
-    });
-    expect(() => brokenClient.enqueue(evt)).not.toThrow();
-    expect(brokenClient.getMetrics().walWriteErrorCount).toBeGreaterThan(0);
+    expect(
+      () =>
+        new BoundedTelemetryClient({
+          walFilePath: "/dev/null/impossible/wal.jsonl",
+          transport: { async send() {} },
+        }),
+    ).toThrow(TelemetryWalInitError);
   });
 
   it("P1-04 meets throughput benchmark (>= 1,000 events/sec in-process)", async () => {
