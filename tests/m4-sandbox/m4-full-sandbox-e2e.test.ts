@@ -132,6 +132,8 @@ describe("M4-03~06 OpenBot × AI Optimization Sandbox Full E2E (with Crash Recov
     await clientA.flush();
     // Simulate crash mid-write with corrupt trailing line
     fs.appendFileSync(walPath, '{"corrupt_partial_crash":', "utf8");
+    // Simulate process death: release the exclusive single-writer lock.
+    clientA.close();
 
     // Start AI Optimization HTTP Server
     const server = createOptimizationHttpServer({
