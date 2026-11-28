@@ -408,3 +408,11 @@ PR #6 作为设计基线可以进入架构评审：契约分层清楚，权威�
 8. 是否批准第 8 节更新后的九个工作包范围、依赖与验收条件？
 
 本文件结束。提交评审报告与证据后停止，等待架构负责人评审。不得自行将建议转为实施，不得合并 PR #4 / #5 / #6，不得申请本阶段的 Adapter 实施授权。
+
+---
+
+## 10. 本评审报告提交的 CI 记录（按 SHA 分开，不得混用）
+
+- 评审正文提交：`8b86c69f85a5426d5d369cb5f7aef1f64f537b76`
+- 证明该 SHA 的 CI：run [46133935688](https://github.com/flykingvip-cloud/ai-optimization/actions/runs/46133935688)（`pull_request` / job [verify](https://github.com/flykingvip-cloud/ai-optimization/actions/runs/46133935688/job/140944950218)），success，作业与 run 完成于 2026-11-28 18:11:11 CST（Asia/Shanghai）。**仅证明 `8b86c69`。**
+- 本 CI 记录提交一旦存在，即为新的文档 HEAD，不得再把 `8b86c69` 称为当前最终 HEAD，也不得把 run `46133935688` 当作新 HEAD 的核验。新 HEAD 的 CI 须单独记录（PR 描述），并区分哪一次 run 证明哪一个 SHA。
