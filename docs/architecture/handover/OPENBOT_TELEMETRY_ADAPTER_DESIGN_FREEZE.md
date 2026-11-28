@@ -417,3 +417,11 @@ Evidence / ACL / 检索权威在 Knowledge SDK 契约（如 `EvidenceAnchor`、`
 | OpenBot CI 失败 | run 46122851166 | `8b83e4eb` | CI 失败事实；日志不可读，根因不推断 |
 
 本文件结束。提交设计冻结评审后停止；不得自行进入 Adapter 编码、PR #4 合并或生产接入。
+
+---
+
+## 14. 本设计文档提交的 CI 记录（按 SHA 分开，不得混用）
+
+- 设计正文提交：`507392bbe62b20334ec954baec9b4ff5ac7089a5`
+- 证明该 SHA 的 CI：run [46132861267](https://github.com/flykingvip-cloud/ai-optimization/actions/runs/46132861267)（`pull_request` / job [verify](https://github.com/flykingvip-cloud/ai-optimization/actions/runs/46132861267/job/140941664001)），success，作业完成于 2026-11-28 17:58:33 CST，run 完成于 17:58:34 CST（Asia/Shanghai）。**仅证明 `507392b`。**
+- 本 CI 记录提交一旦存在，即为新的文档 HEAD，不得再把 `507392b` 称为当前最终 HEAD，也不得把 run `46132861267` 当作新 HEAD 的核验。新 HEAD 的 CI 须单独记录（PR 描述），并区分哪一次 run 证明哪一个 SHA。
