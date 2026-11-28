@@ -1,8 +1,8 @@
 # VERSION_SNAPSHOT_SOURCE_EVIDENCE.md
 
 > Version Snapshot 逐字段来源证据（T3）。  
-> 核验窗口：2026-11-28 20:12–20:18 CST（Asia/Shanghai）。  
-> OpenBot 源码：`13763b2d85c6ca72d3bf5b10acb1825457776ff6`。下列身份 / TaskOutcome / 证据 / 投影 / Evolution 绑定文件的 blob 与 `f3558f2ccd24a1020dff8a378721786b3071f641` **完全相同**（`SOURCE_VERIFIED`）。相对 PR #9 收口文档的字段结论因此仍然适用，并在本轮按当前 blob 复核。  
+> 核验窗口：2026-11-28 21:43–21:50 CST（Asia/Shanghai）。  
+> OpenBot 当前 `main`：`b4e106de7562ce62d2e62057ba16864ec12a2645`。本轮 `git diff --name-only 13763b2d..b4e106de` 仅 5 个 UI 文件。下列身份 / TaskOutcome / 证据 / 投影 / Evolution 绑定文件的 blob 与 `13763b2d85c6ca72d3bf5b10acb1825457776ff6` 及 `f3558f2ccd24a1020dff8a378721786b3071f641` **完全相同**（`SOURCE_VERIFIED`）。字段结论在新 SHA 上重新复核后仍然适用，不是未复核的沿用。  
 > AI Optimization 契约：`16b01d99d33b386102bb9b2b248558eb5517e245`。  
 > 禁止用当前 latest 或配置默认值冒充执行时版本；禁止把 Trace ID 当作 Experiment ID 或幂等键。无法证明的来源一律 **UNVERIFIED**。
 

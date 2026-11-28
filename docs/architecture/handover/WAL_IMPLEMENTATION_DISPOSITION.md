@@ -1,7 +1,7 @@
 # WAL_IMPLEMENTATION_DISPOSITION.md
 
 > PR #4 WAL 的独立处置决策材料（T5）。  
-> 核验窗口：2026-11-28 20:12–20:18 CST（Asia/Shanghai）。  
+> 核验窗口：2026-11-28 21:43–21:50 CST（Asia/Shanghai）。  
 > **本阶段只给出选项与风险，不合并、不实施。PR #4 的合并必须单独授权。**  
 > 禁止将进程崩溃测试表述为断电安全证明。禁止把 PR #4 当作 `main` 已具备的能力或默认实施依赖。
 
@@ -16,7 +16,7 @@
 | 与 `main` 的 merge-base | `c5779f20c8f9011396cd0aea299f8c2b9cd9e240`（Merge PR #1，2026-11-28 11:52:03 CST）。`main` 此后仅并入文档向 PR #3，PR 仍显示可干净合并 | `GITHUB_VERIFIED` |
 | SHA 对齐 CI | [run 46130248496](https://github.com/flykingvip-cloud/ai-optimization/actions/runs/46130248496) `verify` **success**，完成 2026-11-28 17:23:44 CST。只证明该 SHA 的单仓 verify | `GITHUB_VERIFIED` |
 | 变更范围 | 相对 `origin/main...HEAD`：9 个文件，+2410 / −47，含 `packages/telemetry-sdk/src/index.ts`、新增 `wal-lock.ts`、崩溃恢复测试与冻结文档 | `GITHUB_VERIFIED` / `SOURCE_VERIFIED` |
-| OpenBot 官方出站缓冲 | `@13763b2d` **不存在**实现 | `SOURCE_VERIFIED` |
+| OpenBot 官方出站缓冲 | 当前 `main` `@b4e106de`（相对 `13763b2d` 仅 UI 文件变化）**仍不存在**实现 | `SOURCE_VERIFIED` |
 
 `main` 现有 telemetry-sdk（弱 WAL，`SOURCE_VERIFIED`）：不存在 `wal-lock.ts`；队列达到 `maxQueueItems` 时 `this.queue.shift()` 并增加 `droppedCount`（`packages/telemetry-sdk/src/index.ts` 110–112、161–163、184–186 行）。这不满足「未确认事件不得因容量淘汰静默丢失」，也不是 OpenBot 出站缓冲。
 

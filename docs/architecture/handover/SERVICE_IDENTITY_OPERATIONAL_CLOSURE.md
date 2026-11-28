@@ -1,8 +1,8 @@
 # SERVICE_IDENTITY_OPERATIONAL_CLOSURE.md
 
 > Service Identity 技术与运维责任闭环审查（T2）。  
-> 核验窗口：2026-11-28 20:12–20:18 CST（Asia/Shanghai）。  
-> 源码 SHA：OpenBot `13763b2d85c6ca72d3bf5b10acb1825457776ff6`（相关身份/范围文件 blob 与 `f3558f2` 相同）；AI Optimization `16b01d99d33b386102bb9b2b248558eb5517e245`。  
+> 核验窗口：2026-11-28 21:43–21:50 CST（Asia/Shanghai）。  
+> 源码 SHA：OpenBot 当前 `main` `b4e106de7562ce62d2e62057ba16864ec12a2645`（相关身份/范围文件 blob 与 `13763b2d` 及 `f3558f2` 相同，`SOURCE_VERIFIED`）；AI Optimization `16b01d99d33b386102bb9b2b248558eb5517e245`（`main` 未移动）。  
 > **没有可验证的签发、授权和撤销机制，不得宣布 D-03 已解除阻塞。**  
 > 禁止编造责任人姓名或部门。未知项一律 `OWNER_DECISION_PENDING`。
 
@@ -14,7 +14,7 @@
 
 **当前状态：`OWNER_DECISION_PENDING` / 源码未落地。**
 
-本轮在三个仓库当前 `main`、PR #4–#9 评论与审查中，未发现已指定的生产签发方、IdP 产品名或签发工作流（`GITHUB_VERIFIED` 检索为空；生产配置未查，也不在本阶段授权范围内）。
+本轮在三个仓库当前 `main`、PR #4–#10 评论与审查中，未发现已指定的生产签发方、IdP 产品名或签发工作流（`GITHUB_VERIFIED` 检索为空；生产配置未查，也不在本阶段授权范围内）。
 
 现有实现只提供 JWT 验签接口：`verifyJwtAuth` 校验 Bearer、签名、exp/nbf、iss/aud，并要求 `sub` 与 `tenantId` 声明；`principalType` 仅当声明为 `"service"` 时视为服务，否则视为 `"user"`（`packages/shared-contracts/src/auth.ts` 36–122 行，`SOURCE_VERIFIED`）。这证明「如何校验一张已签发的票」，**不证明**谁有权签发。
 

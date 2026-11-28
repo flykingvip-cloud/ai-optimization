@@ -1,8 +1,8 @@
 # TELEMETRY_API_LIMITS_DECISION.md
 
 > 正式 Adapter API 安全限制的可批准方案（T4）。  
-> 核验窗口：2026-11-28 20:12–20:18 CST（Asia/Shanghai）。  
-> 源码 SHA：AI Optimization `16b01d99d33b386102bb9b2b248558eb5517e245`。  
+> 核验窗口：2026-11-28 21:43–21:50 CST（Asia/Shanghai）。  
+> 源码 SHA：AI Optimization `16b01d99d33b386102bb9b2b248558eb5517e245`（本轮 `origin/main` 未移动，下列实现事实已按该 SHA 复核，与 20:12–20:18 CST 包一致）。  
 > **本文件给出明确候选数值和依据，但全部数字在 Owner 确认前都不是最终批准值。**  
 > 64 KiB 只能视为待批准候选值。
 

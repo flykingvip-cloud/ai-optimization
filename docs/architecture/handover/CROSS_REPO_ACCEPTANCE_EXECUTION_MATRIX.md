@@ -1,12 +1,12 @@
 # CROSS_REPO_ACCEPTANCE_EXECUTION_MATRIX.md
 
 > 跨仓库验收执行矩阵（T6）。  
-> 核验窗口：2026-11-28 20:12–20:18 CST（Asia/Shanghai）。  
-> 基线：`ai-optimization@16b01d99d33b386102bb9b2b248558eb5517e245`，`openbot-vp@13763b2d85c6ca72d3bf5b10acb1825457776ff6`，`knowledge-sdk@b953c9922cc1096e0e88455dab6746c01a9d27f9`。  
+> 核验窗口：2026-11-28 21:43–21:50 CST（Asia/Shanghai）。  
+> 基线：`ai-optimization@16b01d99d33b386102bb9b2b248558eb5517e245`，`openbot-vp@b4e106de7562ce62d2e62057ba16864ec12a2645`，`knowledge-sdk@b953c9922cc1096e0e88455dab6746c01a9d27f9`。PR #4–#10 均开放未合并。  
 > **单仓 CI 通过不等于跨仓验收通过。不得把 Mock 测试描述为生产集成验收。生产准入关闭。**  
 > 本矩阵是可执行草案，**不是**已批准方案，**全部用例均尚未执行**。
 
-前置条件总体状态：官方出站路径未实现；Service Identity 签发与 allowlist 控制面未落地；D-01–D-07 未签署；OpenBot `main` CI Gate 与 Workflow CI 在当前 SHA 上为 failure。因此本矩阵目前**不具备启动 L2 的完整前置条件**。最小可启动集仍待 Owner 确认（`OWNER_DECISION_PENDING`）。
+前置条件总体状态：官方出站路径未实现；Service Identity 签发与 allowlist 控制面未落地；D-01–D-07 未签署；OpenBot 当前 `main` `b4e106de` 的 CI Gate 已 failure；Workflow CI 在本轮核验结束时仍 in_progress，但已有多项失败 job，不得称为通过。因此本矩阵目前**不具备启动 L2 的完整前置条件**。最小可启动集仍待 Owner 确认（`OWNER_DECISION_PENDING`）。
 
 测试分层：
 
@@ -53,10 +53,10 @@
 
 ## 3. 明确不能当作通过条件的证据
 
-1. `ai-optimization` 单仓 CI success（含 PR #4–#9 的 docs/`verify`，包括 PR #9 CI 46140138029 success）。
+1. `ai-optimization` 单仓 CI success（含 PR #4–#10 的 docs/`verify`，包括 PR #9 CI 46140138029 与 PR #10 CI 46145083123 success）。
 2. `knowledge-sdk` 单仓测试通过。
 3. `openbot-vp` 任一局部 workflow success（Install Smoke、Workflow Sanity、CI Canary 等）或「部分 job 绿」。
-4. 当前 OpenBot CI Gate / Workflow CI **失败**，更不得解释为平台已绿。
+4. 当前 OpenBot CI Gate **失败**，Workflow CI **尚未结束且已有失败 job**，更不得解释为平台已绿。
 5. PR #4 WAL 集成测试通过（测的是未合并 SDK，不是 OpenBot 出站缓冲）。
 6. 仅 Mock 的契约测试全绿。
 7. 设计评审、决策登记、收口文档或本矩阵本身。

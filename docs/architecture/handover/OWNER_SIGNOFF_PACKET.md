@@ -6,7 +6,8 @@
 > 正式决策状态因此全部保持 **`PENDING_OWNER`**。  
 > 生产准入：**关闭**。本阶段未申请、未开始编码、未创建或合并 PR、未部署。
 
-核验窗口：2026-11-28 20:12–20:18 CST（Asia/Shanghai）。  
+核验窗口：2026-11-28 21:43–21:50 CST（Asia/Shanghai）。  
+> 刷新说明：本轮为强制刷新（相对 2026-11-28 20:12–20:18 CST 包）。OpenBot `origin/main` 已前移至 `b4e106de7562ce62d2e62057ba16864ec12a2645`（Merge PR #373，2026-11-28 21:33:19 CST）；相对 `13763b2d` 仅变更 5 个 UI 文件（i18n/brand-assets/port-shells 测试与实现），下列身份 / TaskOutcome / 投影 / ModelCallEvidence / Evolution 绑定文件 blob 与 `13763b2d`（及更早的 `f3558f2`）完全相同（`SOURCE_VERIFIED`）。AI Optimization 与 Knowledge SDK 的 `main` 未移动。PR #4–#9 状态未变；新增文档向 PR #10（OPEN，HEAD `034bf1dc844e9067e20c7d5d364dc4435b6de613`，无评论/审查，CI 46145083123 success）。PR #10 正文与评论中 **没有** D-01–D-07 正式签署，其内容对应 20:12–20:18 CST 包，本轮本地刷新 **不会** 回写该 PR。  
 拟签批人 / 决策责任人：架构负责人 Yolanda Lee。  
 适用范围：Phase 1 官方 Telemetry Adapter（OpenBot 出站 → AI Optimization 入库），非生产实施计划授权，非生产变更授权。
 
@@ -15,7 +16,7 @@
 | 仓库 | `origin/main` 完整 SHA | 提交时间（CST） |
 | --- | --- | --- |
 | `flykingvip-cloud/ai-optimization` | `16b01d99d33b386102bb9b2b248558eb5517e245` | 2026-11-28 14:44:27 CST |
-| `flykingvip-cloud/openbot-vp` | `13763b2d85c6ca72d3bf5b10acb1825457776ff6` | 2026-11-28 19:07:48 CST |
+| `flykingvip-cloud/openbot-vp` | `b4e106de7562ce62d2e62057ba16864ec12a2645` | 2026-11-28 21:33:19 CST |
 | `flykingvip-cloud/knowledge-sdk` | `b953c9922cc1096e0e88455dab6746c01a9d27f9` | 2026-11-25 10:10:14 CST |
 
 标签用法（每条结论只标一个）：`GITHUB_VERIFIED`、`SOURCE_VERIFIED`、`USER_REPORTED`、`RECOMMENDATION`、`OWNER_DECISION_PENDING`。
@@ -33,8 +34,8 @@
 
 本轮检索（`GITHUB_VERIFIED`）：
 
-1. PR #4–#9 全部仍为 `OPEN`、`MERGEABLE`、`CLEAN`，`reviewDecision` 为空；各 PR 的 issue comments、reviews、review comments 均为空数组。
-2. 未发现任何带有「批准 D-01…D-07」「APPROVED」「正式签署」且可归属 Owner 的 GitHub 书面记录。
+1. PR #4–#10 全部仍为 `OPEN`、`MERGEABLE`、`CLEAN`，`reviewDecision` 为空；各 PR 的 issue comments、reviews、review comments 均为空数组。
+2. 未发现任何带有「批准 D-01…D-07」「APPROVED」「正式签署」且可归属 Owner 的 GitHub 书面记录。PR #10 本身声明准入仍为 `BLOCKED_PENDING_BOTH`、D-01–D-07 仍为 `PENDING_OWNER`，且「不授权合并或实施」；上传文档 PR **不是** 正式签署。
 3. PR #7 仍是设计评审建议（RECOMMENDED）；PR #8 标题与正文仍为「建议稿（待审批）」；PR #9 提交说明与收口总报结论仍为 `BLOCKED_PENDING_OWNER_DECISIONS`。t20u「固化」是收口方向（`USER_REPORTED`），不是 `APPROVED` 印章。
 
 因此，下列七项的「决策日期」均为「无（尚未签署）」。若 Owner 签署，应在本包或等效书面记录中单独填写日期、范围和签批意见，不得把本文件的建议栏改写成已批准。
@@ -61,7 +62,7 @@ Phase 1 官方遥测出站与入库仅允许 Enterprise Tenant。Personal 范围
 
 **支持证据：**
 
-- OpenBot `TrustedScope` 个人分支只有 `personalDomainId` / `subjectRef` / `authzScopeRef`，**没有** `tenantId`；企业分支才有 `tenantId`（`src/task-outcome/types.ts` 63–71 行，`SOURCE_VERIFIED`，blob 与 `f3558f2` 相同）。
+- OpenBot `TrustedScope` 个人分支只有 `personalDomainId` / `subjectRef` / `authzScopeRef`，**没有** `tenantId`；企业分支才有 `tenantId`（`src/task-outcome/types.ts` 63–71 行，`SOURCE_VERIFIED`，当前 `main` `b4e106de` 上该 blob 与 `13763b2d` / `f3558f2` 相同）。
 - AI Optimization `TelemetryEvent.tenantId` 为必填（`packages/shared-contracts/src/index.ts` 22–28 行，`SOURCE_VERIFIED`）。这与个人 TrustedScope 无 `tenantId` 构成跨仓契约冲突，支持第一期只出站企业范围。
 - `scopeFromChatEntry`：存在非空 `tenantId` 则构建 enterprise，否则构建 personal；空 `subjectRef` 会填成 `"anonymous"`（`src/task-outcome/chat-entry.ts` 47–65 行）。这是内部账本回退，不是官方 Adapter 出站身份（`SOURCE_VERIFIED`）。
 
@@ -139,7 +140,7 @@ Phase 1 官方遥测出站与入库仅允许 Enterprise Tenant。Personal 范围
 **支持证据：**
 
 - 对端契约已有 `traceContext.traceId` / `spanId` / `parentSpanId` / `runId` 等字段（`packages/shared-contracts/src/index.ts` 33–45 行，`SOURCE_VERIFIED`），但没有 W3C `traceparent` 解析或 generated 标记字段。
-- 在 OpenBot `13763b2d` 的 `*.ts` / `*.tsx` / `*.swift` / `*.kt` 中检索 `traceparent`：**无匹配**（`SOURCE_VERIFIED`）。官方出站传播尚未实现。
+- 在 OpenBot 当前 `main` `b4e106de`（相关检索范围与 `13763b2d` 相同，本轮对当前树复核）的 `*.ts` / `*.tsx` / `*.swift` / `*.kt` 中检索 `traceparent`：**无匹配**（`SOURCE_VERIFIED`）。官方出站传播尚未实现。
 - 当前入库不校验 W3C `traceId` 格式（`telemetry-ingestion/src/index.ts` 18–27 行，`SOURCE_VERIFIED`）。
 - 现有幂等键是独立字段 `idempotencyKey`，与 `traceId` 分离（契约 25、34 行）。建议保持并禁止用后者替代前者。
 
@@ -167,7 +168,7 @@ Version Snapshot 只允许使用该次运行的真实运行时版本。无法证
 - `ModelCallEvidence` 有该次调用的 `provider` / `model`，无独立 `modelVersion`（`src/executor-evidence/model-call-evidence.ts` 29–44 行，`SOURCE_VERIFIED`）。
 - `PROJECTION_PROMPT_VERSION = "rule-v2"` 是会话投影规则版本，不是已证明的 Agent 模型调用 Prompt Version（`src/conversations/projection.ts` 48、147 行，`SOURCE_VERIFIED`）。
 - `DEFAULT_AGENT_ID = "main"` 是 Agent id 回退，不是 Agent Version（`src/routing/session-key.ts` 19、89–106 行，`SOURCE_VERIFIED`）。
-- 本轮在 `src/task-outcome` 与 `src/executor-evidence` 下确认：普通 `TaskOutcomeRecord` 仍无 `experimentId` / `agentVersion` / `toolVersion` / 运行时 `promptVersion`（`SOURCE_VERIFIED`）。相关文件 blob 与 `f3558f2` 完全相同。
+- 本轮在 `src/task-outcome` 与 `src/executor-evidence` 下确认：普通 `TaskOutcomeRecord` 仍无 `experimentId` / `agentVersion` / `toolVersion` / 运行时 `promptVersion`（`SOURCE_VERIFIED`）。相关文件 blob 在 `b4e106de` 上与 `13763b2d` / `f3558f2` 完全相同。
 
 **反对意见或风险：**
 
@@ -216,7 +217,7 @@ Version Snapshot 只允许使用该次运行的真实运行时版本。无法证
 
 **支持证据：**
 
-- OpenBot `@13763b2d` 无官方 Telemetry Adapter 出站缓冲实现（`SOURCE_VERIFIED`）。
+- OpenBot 当前 `main` `@b4e106de` 仍无官方 Telemetry Adapter 出站缓冲实现（`SOURCE_VERIFIED`；本轮 diff 未触及该路径）。
 - `ai-optimization` `main@16b01d99` 的 telemetry-sdk 在队列满时 `shift()` 并增加 `droppedCount`（`packages/telemetry-sdk/src/index.ts` 110–112、161–163、184–186 行，`SOURCE_VERIFIED`），不满足「未确认事件不得静默丢失」。该实现也不是 OpenBot 出站缓冲。
 - PR #4 HEAD `8324aa2441145bb1c685df5c8e65694277398f84` 仍 OPEN，未合并；其文档与锁实现明确：协作式锁、非 Linux fail-closed、at-least-once、未做真实断电（`SOURCE_VERIFIED` / `GITHUB_VERIFIED`）。
 
