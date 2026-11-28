@@ -195,7 +195,15 @@ PR：https://github.com/flykingvip-cloud/ai-optimization/pull/4 （OPEN，**未�
 | `1c5c2ca1018d26b1f9f1bb7a1d1f0c6da2b50eb0` | https://github.com/flykingvip-cloud/ai-optimization/actions/runs/46112441099 | success（2026-11-28 13:31:09 CST） | 初版报告 HEAD 的历史验证，不是 `365e667`，也不是本轮修复 |
 | `365e667654152b2f1ed48a5e28e65241476ddf5a` | https://github.com/flykingvip-cloud/ai-optimization/actions/runs/46112509294 | success（2026-11-28 13:32:00 CST） | 负责人审核时的 HEAD。审核已指出不得与上一 run 混用；该结论已被 P1/P2 修复取代，不能再作为当前 HEAD 的核验 |
 
-**当前实现提交** `6d7d823e922f7b954cd690c0702c06e9dc429946` 及包含本报告更新的后续 HEAD，必须在推送后重新查看 GitHub Actions。本段在推送前写入，因此**此处尚无修复后 HEAD 的 CI 结论**。不得把上表历史 success 抄到当前 HEAD 上。当前 HEAD 的 run URL 与结论将在推送后单独核对。
+**修复后已核验的 HEAD**（在本段写入时的报告提交 `203674fc6b1b0095ab3a3ae1be038be5439d6e9b`，包含 `6d7d823` 与审核记录）：
+
+- SHA：`203674fc6b1b0095ab3a3ae1be038be5439d6e9b`
+- Run：https://github.com/flykingvip-cloud/ai-optimization/actions/runs/46117216838
+- Job：https://github.com/flykingvip-cloud/ai-optimization/actions/runs/46117216838/job/140893623562
+- 结论：`success`（约 17s）
+- 完成时间：2026-11-28 14:34:31 CST（Asia/Shanghai）
+
+若本段随后以新的文档提交写入该分支，新 HEAD 必须再查一次 CI，不得把上述 `203674f` 的 run 或更早的 `365e667` / `1c5c2ca` runs 当成新 HEAD 的核验结论。
 
 CI 成功只证明工程检查通过。它不是生产验收，也不是合并或部署授权。
 
@@ -220,7 +228,7 @@ CI 成功只证明工程检查通过。它不是生产验收，也不是合并�
 
 | 门禁 | 含义 | 本轮结论 |
 | --- | --- | --- |
-| Engineering Complete | 代码、测试和针对**当前 HEAD** 的 CI 证据通过 | **本轮修复的本地检查已通过（9 个文件 / 59 个测试）。** 修复后 HEAD 的 GitHub CI 须在推送后单独核对，不得沿用 `365e667` 或 `1c5c2ca` 的 CI 结论。PR 合并仍待单独审批。这是本文件记录的唯一进行中层。 |
+| Engineering Complete | 代码、测试和针对**当前 HEAD** 的 CI 证据通过 | **本轮修复的本地检查已通过（9 个文件 / 59 个测试）。针对 `203674f` 的 CI verify 已成功（run `46117216838`）。** 若本文件再前进，须核验新 HEAD 的 CI，不得沿用 `365e667`、`1c5c2ca` 或已过时 HEAD 的结论。PR 合并仍待单独审批。这是本文件记录的唯一进行中层。 |
 | Integration Accepted | 真实 IdP、跨仓调用和目标基础设施验证通过 | **未达到。** |
 | Production Accepted | 安全、可靠性、运维和发布门禁全部通过 | **未达到。** 生产准入保持关闭。 |
 
