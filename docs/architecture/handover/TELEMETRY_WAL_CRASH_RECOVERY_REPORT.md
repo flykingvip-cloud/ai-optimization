@@ -6,8 +6,8 @@
 - **PR**：https://github.com/flykingvip-cloud/ai-optimization/pull/4 （OPEN，`base=main`，**未合并**，未获合并授权）
 - **基线 `origin/main`（本分支建立时）**：`c5779f20c8f9011396cd0aea299f8c2b9cd9e240`
 - **当前 `origin/main`**：`16b01d99d33b386102bb9b2b248558eb5517e245`（PR #3 已合并；该合并不改变 PR #4 暂缓合并的判断，也不提升生产准入）
-- **本轮修复前 HEAD（历史，不得当作当前核验）**：`63279e6e311ec9d9042599ecc5169f26b51c13bc`
-- **本轮代码与测试提交**：`9d16bc0ae97e33a254d37984d74853c9f5ba3fd0`
+- **上一轮最终 HEAD（历史，不得当作本轮核验）**：`b72ec70eef681e72e723a2af8e784e1496c49add`（CI run [46127466291](https://github.com/flykingvip-cloud/ai-optimization/actions/runs/46127466291) 仅证明该 SHA，完成于 2026-11-28 16:48:01 CST）
+- **本轮代码与测试提交**：`fb53e6ca5c919c6d52bed40f6a85b00b66923e29`
 - **记录日期**：2026-11-28（Asia/Shanghai，UTC+8）
 - **生产准入**：保持关闭
 - **本轮未执行**：合并本 PR、提交 `main`、部署、生产 IdP 接入、生产数据库变更、流量切换、在 GitHub 上批准该 PR、改动其他仓库
@@ -35,10 +35,12 @@
 | 引用 | SHA | 本地检查 | CI | 含义 |
 | --- | --- | --- | --- | --- |
 | 功能分支起点 | `c5779f20c8f9011396cd0aea299f8c2b9cd9e240` | — | — | 建立 `feat/p0-2-telemetry-wal` 时的 `origin/main` |
-| 负责人 2026-11-28 16:34 决定前的 HEAD | `63279e6e311ec9d9042599ecc5169f26b51c13bc` | 9 个文件 / 59 个测试 | Run [46117273097](https://github.com/flykingvip-cloud/ai-optimization/actions/runs/46117273097) success，完成于 2026-11-28 14:35:27 CST（Asia/Shanghai） | **仅证明 `63279e6`。** 不得当作本轮修复后 HEAD 的核验。负责人决定：PR #4 保持 OPEN，不批准合并。 |
-| 更早的历史 run | `365e667` / `1c5c2ca` | — | 46112509294 / 46112441099 | 更早轮次，均不得与 `63279e6` 或本轮 HEAD 混为同一次核验 |
-| 本轮代码与测试 | `9d16bc0ae97e33a254d37984d74853c9f5ba3fd0` | 见第 6 节：9 个文件 / 66 个测试（2026-11-28 16:45 CST） | 推送后单独记录。不得把 run 46117273097 抄到本 SHA 上 | 本轮三项修复的实现提交 |
-| 本报告更新及此后的最终 HEAD | 随后提交 | — | **必须引用最终推送 HEAD 自己的 run**，见第 7 节 | 文档提交可能使 HEAD 再前进 |
+| 更早的历史 run | `365e667` / `1c5c2ca` | — | 46112509294 / 46112441099 | 更早轮次，不得与后续 SHA 混为同一次核验 |
+| 负责人 2026-11-28 16:34 决定前的 HEAD | `63279e6e311ec9d9042599ecc5169f26b51c13bc` | 9 个文件 / 59 个测试 | Run [46117273097](https://github.com/flykingvip-cloud/ai-optimization/actions/runs/46117273097) success，完成于 2026-11-28 14:35:27 CST（Asia/Shanghai） | **仅证明 `63279e6`。** 负责人决定：PR #4 保持 OPEN，不批准合并。 |
+| 上一轮代码（锁竞态 / 清理哨兵 / 初始化后 I/O） | `9d16bc0ae97e33a254d37984d74853c9f5ba3fd0` | 9 个文件 / 66 个测试（2026-11-28 16:45 CST） | 不得单独把更早 run 抄到该 SHA 上 | 上一轮三项修复的实现提交 |
+| 上一轮最终 HEAD | `b72ec70eef681e72e723a2af8e784e1496c49add` | 同上 66 个测试（文档记录提交） | Run [46127466291](https://github.com/flykingvip-cloud/ai-optimization/actions/runs/46127466291) success，完成于 2026-11-28 16:48:01 CST（Asia/Shanghai） | **仅证明 `b72ec70`。** 不得当作本轮 `listTmpFiles` 修复的核验。 |
+| 本轮代码与测试 | `fb53e6ca5c919c6d52bed40f6a85b00b66923e29` | 见第 6 节：9 个文件 / 71 个测试（2026-11-28 17:09:05 CST） | Run [46129186635](https://github.com/flykingvip-cloud/ai-optimization/actions/runs/46129186635) success，完成于 2026-11-28 17:10:33 CST（Asia/Shanghai）。**仅证明 `fb53e6c`。** | 本轮 `listTmpFiles()` fail-closed 修复与目录读取故障注入测试 |
+| 本报告更新及此后的最终 HEAD | 随后文档提交 | — | **必须引用最终推送 HEAD 自己的 run**，不得把 run `46129186635`（仅证明 `fb53e6c`）或 `46127466291`（仅证明 `b72ec70`）当成新 HEAD 的核验。见第 7 节；最终以 PR 描述为准。 | 文档提交可能使 HEAD 再前进 |
 
 未改动 PR #3 worktree，也未改写 `docs/architecture/handover/P0_1_MERGED_MAIN_BASELINE.md`。
 
@@ -97,9 +99,30 @@
 - `fails closed on WAL write errors after a successful initialization`
 - 既有 `fails closed with a distinct error when WAL initialization cannot be completed`
 
+### 3.4 本轮（2026-11-28 17:05 CST）补修：`listTmpFiles()` 静默吞掉目录读取错误
+
+**确认的问题：** 截至上一轮最终 HEAD `b72ec70`，`listTmpFiles()` 在 `fs.readdirSync(dir)` 失败时捕获异常并返回空数组。这会把真实 I/O 故障伪装成“没有临时文件”。初始化阶段可能因此把残留 tmp 状态当成空目录，并将 WAL 错误地标记为 `enabled`；成功 send 后的清理阶段可能在未枚举 `.complete` 的情况下继续删除最终 WAL、清除 cleanup sentinel，破坏 fail-closed 保证。
+
+**修复机制（代码提交 `fb53e6ca5c919c6d52bed40f6a85b00b66923e29`）：**
+
+1. 移除 `listTmpFiles()` 对目录读取错误的静默吞异常。除负责人明确允许忽略的 `ENOENT`（目录不存在，视为没有残留 tmp）外，其他 `readdir` 错误必须向上抛出。
+2. 初始化 / 恢复阶段的目录读取失败由既有 `acquireWalLockAndRecover()` 包装为 `TelemetryWalInitError`。WAL 不得标记为 `enabled`，已获取的锁会被释放。
+3. 成功 send 后的 `commitEmptyWal()` 已先写入并 fsync cleanup sentinel，再调用 `listTmpFiles()`。目录读取失败时停止后续 unlink，保留 sentinel、最终 WAL 和恢复所需文件，并由 `persistWalAtomic()` 将 `walStatus` 置为 `io_failed`、抛出 `TelemetryWalIoError`。重启后若 sentinel 仍在，永不晋升 leftover `.complete`，因此不会把已成功发送且只存在于 stale `.complete` 中的事件复活。
+4. 对外错误沿用现有语义：`TelemetryWalInitError` 或 `TelemetryWalIoError`，未新增错误类型。
+
+测试使用可控的 `fs.readdirSync` 故障注入（EIO / EACCES），不依赖真实权限或不稳定的操作系统环境；每个测试结束后恢复 mock。全部通过：
+
+- `fails closed when init-time readdirSync returns EIO and does not mark the WAL enabled`
+- `fails closed when init-time readdirSync returns EACCES and does not treat leftover temps as an empty directory`
+- `retains the cleanup sentinel when directory read fails during post-send cleanup`
+- `does not delete the final WAL early or resurrect exported events when cleanup readdir fails with a leftover .complete`
+- `exposes recovery failure when a later directory re-read fails and does not skip leftover state`
+
+**验收项：初始化、恢复、清理阶段 I/O 错误均 fail-closed — 通过。** 依据是上述 5 个故障注入测试以及完整 `pnpm run check`（9 个文件 / 71 个测试）全部通过。该项通过只证明工程检查，不改变 at-least-once 语义，也不提升生产准入。
+
 ---
 
-## 4. 四个指定风险的当前处理（以 `9d16bc0` 为准）
+## 4. 四个指定风险的当前处理（锁 / 清理哨兵以 `9d16bc0` 为准；目录读取 fail-closed 以 `fb53e6c` 为准）
 
 实现位置：`packages/telemetry-sdk/src/index.ts`、`packages/telemetry-sdk/src/wal-lock.ts`。
 
@@ -109,15 +132,15 @@
 
 ## 5. Phase 0 必须项
 
-依据 `docs/architecture/handover/PHASE0_EXECUTION_PLAN.md` 的 P0-2 条款：独立子进程 SIGKILL 恢复、部分写入与 tmp 策略、rename 后恢复、父目录 fsync（非断电通过）、容量丢弃审计、按 `idempotencyKey` 的至少一次重放、同一路径并发拒绝，均仍覆盖。本轮额外覆盖双进程锁竞争、清理窗口组合故障，以及初始化后 I/O fail-closed。
+依据 `docs/architecture/handover/PHASE0_EXECUTION_PLAN.md` 的 P0-2 条款：独立子进程 SIGKILL 恢复、部分写入与 tmp 策略、rename 后恢复、父目录 fsync（非断电通过）、容量丢弃审计、按 `idempotencyKey` 的至少一次重放、同一路径并发拒绝，均仍覆盖。上一轮已额外覆盖双进程锁竞争、清理窗口组合故障，以及初始化后写路径 I/O fail-closed。本轮再覆盖初始化、恢复和清理阶段的目录读取故障注入，使 I/O fail-closed 声明与 `listTmpFiles()` 的实现一致。
 
 ---
 
-## 6. 本地检查（本轮修复）
+## 6. 本地检查（本轮 `listTmpFiles` 修复）
 
-命令在仓库根目录、功能分支 `feat/p0-2-telemetry-wal`、实现提交 `9d16bc0ae97e33a254d37984d74853c9f5ba3fd0` 上执行。
+命令在仓库根目录、功能分支 `feat/p0-2-telemetry-wal`、实现提交 `fb53e6ca5c919c6d52bed40f6a85b00b66923e29` 上执行。
 
-环境：Node v24.22.1，pnpm v10.34.6。时间：2026-11-28 16:45 CST（Asia/Shanghai）。
+环境：Node v24.22.1，pnpm v10.34.6。时间：2026-11-28 17:09:05 CST（Asia/Shanghai）。
 
 ```text
 $ pnpm run check
@@ -125,15 +148,17 @@ $ pnpm run check
 > @openbot/ai-optimization@0.1.0 check
 > pnpm run typecheck && pnpm run test
 
+> tsc --noEmit
+
  RUN  v5.1.2 /workspace/repos/ai-optimization-p0-2
 
  Test Files  9 passed (9)
-      Tests  66 passed (66)
-   Start at  16:45:16
-   Duration  3.47s
+      Tests  71 passed (71)
+   Start at  17:09:05
+   Duration  3.25s
 ```
 
-相对修复前 `63279e6` 的 9 个文件 / 59 个测试，本轮净增 7 个测试。
+TypeScript 类型检查通过。WAL 崩溃恢复、锁竞争、`.complete` 清理哨兵、并发 flush、容量控制和 in-flight batch 既有测试无回归。本轮新增 5 个目录读取故障注入测试全部通过。相对上一轮最终 HEAD `b72ec70` 的 9 个文件 / 66 个测试，本轮为 9 个文件 / 71 个测试。
 
 ---
 
@@ -141,23 +166,27 @@ $ pnpm run check
 
 PR：https://github.com/flykingvip-cloud/ai-optimization/pull/4 （OPEN，**未合并**，未获合并授权）
 
-**历史 CI（不得当作本轮修复后的当前核验）：**
+**历史 CI（不得当作本轮 `listTmpFiles` 修复的核验）：**
 
 | SHA | Run | 结论 |
 | --- | --- | --- |
-| `63279e6e311ec9d9042599ecc5169f26b51c13bc` | https://github.com/flykingvip-cloud/ai-optimization/actions/runs/46117273097 | success（2026-11-28 14:35:27 CST）。负责人审核/决定时所见的前一轮 HEAD。 |
 | `365e667` / `1c5c2ca` | 46112509294 / 46112441099 | 更早轮次 |
+| `63279e6e311ec9d9042599ecc5169f26b51c13bc` | https://github.com/flykingvip-cloud/ai-optimization/actions/runs/46117273097 | success（2026-11-28 14:35:27 CST）。仅证明 `63279e6`。 |
+| `262c9efb55d5eb897cc9bbea81de90ee63114902` | https://github.com/flykingvip-cloud/ai-optimization/actions/runs/46127394214 | success（2026-11-28 16:47:08 CST）。仅证明 `262c9ef`。 |
+| `b72ec70eef681e72e723a2af8e784e1496c49add` | https://github.com/flykingvip-cloud/ai-optimization/actions/runs/46127466291 | success（2026-11-28 16:48:01 CST）。上一轮最终 HEAD，仅证明 `b72ec70`。 |
 
-**本轮修复后已核验的报告提交**（代码 `9d16bc0` + 本轮报告初稿）：
+**本轮代码与测试提交已核验：**
 
-- SHA：`262c9efb55d5eb897cc9bbea81de90ee63114902`
-- Run：https://github.com/flykingvip-cloud/ai-optimization/actions/runs/46127394214
-- Job：https://github.com/flykingvip-cloud/ai-optimization/actions/runs/46127394214/job/140924917879
+- SHA：`fb53e6ca5c919c6d52bed40f6a85b00b66923e29`
+- Run：https://github.com/flykingvip-cloud/ai-optimization/actions/runs/46129186635
+- Job：https://github.com/flykingvip-cloud/ai-optimization/actions/runs/46129186635/job/140930402553
 - Event：`pull_request`
-- 结论：`success`（约 21s）
-- 完成时间：2026-11-28 16:47:08 CST（Asia/Shanghai）
+- Workflow：`CI` / Job：`verify`
+- 结论：`success`
+- 完成时间：2026-11-28 17:10:33 CST（Asia/Shanghai）
+- **该 run 只证明 `fb53e6c`。** 不得把 run `46127466291` 或更早的成功结果抄到本 SHA 上。
 
-若本节随后以新的文档提交写入，新 HEAD 必须再查一次 CI。不得把 run `46127394214`、更不得把 `46117273097`（仅证明 `63279e6`）当成新 HEAD 的核验结论。最终以 GitHub 上该 PR 最新 HEAD 的 verify 作业为准，并写入 PR 描述。
+若本节随后以新的文档提交写入，新 HEAD 必须再查一次 CI。不得把 run `46129186635` 当成新 HEAD 的核验结论。最终以 GitHub 上该 PR 最新 HEAD 的 verify 作业为准，并写入 PR 描述。
 
 CI 成功只证明工程检查通过。它不是生产验收，也不是合并或部署授权。
 
@@ -179,8 +208,8 @@ CI 成功只证明工程检查通过。它不是生产验收，也不是合并�
 
 | 门禁 | 含义 | 本轮结论 |
 | --- | --- | --- |
-| Engineering Complete | 代码、测试和针对**当前最终 HEAD** 的 CI 证据通过 | **本轮修复的本地检查已通过（9 个文件 / 66 个测试）。针对 `262c9ef` 的 CI verify 已成功（run `46127394214`）。** 若本文件再前进，须核验新 HEAD 的 CI，不得沿用 `63279e6` 的 run 46117273097。PR 合并仍待单独审批。 |
+| Engineering Complete | 代码、测试和针对**当前最终 HEAD** 的 CI 证据通过 | **本轮代码 `fb53e6c` 的本地检查已通过（9 个文件 / 71 个测试，2026-11-28 17:09:05 CST）。针对 `fb53e6c` 的 CI verify 已成功（run `46129186635`，2026-11-28 17:10:33 CST）。验收项“初始化、恢复、清理阶段 I/O 错误均 fail-closed”已通过。** 若本文件再前进，须核验新 HEAD 的 CI，不得沿用 `fb53e6c` 的 run 46129186635，更不得沿用 `b72ec70` 的 run 46127466291。PR 合并仍待单独审批。 |
 | Integration Accepted | 真实 IdP、跨仓调用和目标基础设施验证通过 | **未达到。** |
 | Production Accepted | 安全、可靠性、运维和发布门禁全部通过 | **未达到。** 生产准入保持关闭。 |
 
-2026-11-28 16:34 CST，负责人正式决定：PR #4 保持 OPEN，不批准合并。本轮只在已授权的独立分支上修复、测试和更新 PR，不构成新的合并授权，也不得把本文件当作生产就绪声明。
+2026-11-28 16:34 CST，负责人正式决定：PR #4 保持 OPEN，不批准合并。2026-11-28 17:05 CST 的跟进只授权关闭 `listTmpFiles()` 静默吞错缺口。本轮只在已授权的独立分支上修复、测试和更新 PR，不构成新的合并授权，也不得把本文件当作生产就绪声明。
