@@ -14,7 +14,20 @@ export class TelemetryWalInitError extends Error {
   }
 }
 
-export type TelemetryWalStatus = "disabled" | "enabled";
+export class TelemetryWalIoError extends Error {
+  readonly code = "WAL_IO_FAILED" as const;
+
+  constructor(message: string, options?: { cause?: unknown }) {
+    super(message, options);
+    this.name = "TelemetryWalIoError";
+  }
+}
+
+export type TelemetryWalStatus = "disabled" | "enabled" | "io_failed";
+
+export function walCleanupSentinelPath(walFilePath: string): string {
+  return `${walFilePath}.cleanup`;
+}
 
 export const REDACTION_POLICY_VERSION = "1.1.0";
 
@@ -64,6 +77,8 @@ export type WalPersistStage =
   | "afterRename"
   | "afterParentDirFsync"
   | "afterTransportSend"
+  | "afterCleanupSentinel"
+  | "afterCleanupTmpsRemoved"
   | "afterDurableCleanup";
 
 /**
@@ -155,12 +170,21 @@ export interface TelemetryClientMetrics {
  *   (not-yet-sent) queue events may be evicted under maxWalBytes. A new event
  *   that cannot fit alongside the unconfirmed in-flight set is refused and
  *   audited; the in-flight set is left intact.
+ * - Post-send empty cleanup writes a durable `${wal}.cleanup` sentinel first,
+ *   then removes leftover tmp files (including `.complete`), then unlinks the
+ *   final WAL. Recovery never promotes a `.complete` when that sentinel is
+ *   present, so a leftover complete from an already-exported batch cannot be
+ *   resurrected if a crash hits the cleanup window.
+ * - After WAL initialization succeeds, later WAL read/write failures throw
+ *   TelemetryWalIoError and mark walStatus=io_failed. The client does not
+ *   silently continue as if persistence were still healthy.
  *
- * Concurrency: one writer per walFilePath. A second live client is refused
+ * Concurrency: one writer per walFilePath. Live exclusivity is a Linux
+ * abstract Unix socket plus a lock cookie; a second live client is refused
  * with TelemetryWalLockError. If walFilePath is set but initialization fails,
- * construction throws TelemetryWalInitError (fail-closed) instead of running
- * with persistence silently disabled. close() releases the lock; a leftover
- * lock after SIGKILL is treated as stale once the holder is no longer alive.
+ * construction throws TelemetryWalInitError (fail-closed). close() unlinks the
+ * lock cookie only while the socket is still held and only if it still belongs
+ * to this holder, then releases the socket.
  */
 export class BoundedTelemetryClient {
   private readonly maxQueueItems: number;
@@ -182,6 +206,7 @@ export class BoundedTelemetryClient {
   private walDirFsyncErrorCount = 0;
   private walLock: ExclusiveWalLock | undefined;
   private walEnabled = false;
+  private walStatus: TelemetryWalStatus = "disabled";
   private closed = false;
   /** Unconfirmed batches handed to transport.send. Included in WAL snapshots until success or re-queue. */
   private readonly inFlightBatches: TelemetryEvent[][] = [];
@@ -217,7 +242,9 @@ export class BoundedTelemetryClient {
     try {
       this.reconcileLeftoverTmps();
       this.recoverFromWal();
+      this.clearCleanupSentinelAfterRecover();
       this.walEnabled = true;
+      this.walStatus = "enabled";
     } catch (error) {
       this.walWriteErrorCount += 1;
       this.walEnabled = false;
@@ -259,78 +286,94 @@ export class BoundedTelemetryClient {
     return out;
   }
 
-  private unlinkQuietly(filePath: string): void {
-    try {
-      fs.unlinkSync(filePath);
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
-        this.walWriteErrorCount += 1;
-      }
-    }
-  }
-
   /**
    * Leftover tmp policy:
    * - `.partial` is never a promotion candidate (may be mid-write / truncated).
-   * - `.complete` may be promoted only if the final WAL is missing AND exactly
-   *   one complete tmp is present. Multiple complete tmps are fail-closed
-   *   (none are promoted) because a unique uncommitted snapshot cannot be chosen
-   *   safely. The files are left in place for inspection and counted as errors.
+   * - A `${wal}.cleanup` sentinel means post-send durable cleanup had started.
+   *   In that case leftover `.complete` files are never promoted, even if the
+   *   final WAL is missing, because they may contain already-exported events.
+   * - Otherwise `.complete` may be promoted only if the final WAL is missing
+   *   AND exactly one complete tmp is present. Multiple complete tmps are
+   *   fail-closed (none are promoted).
    * - If the final WAL exists, every leftover tmp is discarded. The pre-rename
    *   (or already committed) WAL is the durable state.
    */
   private reconcileLeftoverTmps(): void {
     if (!this.walFilePath) return;
     const tmps = this.listTmpFiles();
-    if (tmps.length === 0) return;
+    const sentinelExists = fs.existsSync(walCleanupSentinelPath(this.walFilePath));
     const finalExists = fs.existsSync(this.walFilePath);
     const complete = tmps.filter((t) => t.kind === "complete");
-    if (!finalExists && complete.length === 1 && complete[0]) {
-      try {
-        fs.renameSync(complete[0].path, this.walFilePath);
-        this.fsyncParentDirectory();
-      } catch {
-        this.walWriteErrorCount += 1;
-      }
-    } else if (!finalExists && complete.length > 1) {
-      this.walWriteErrorCount += 1;
-      // Do not promote or delete complete tmps when the choice would be ambiguous.
+    if (sentinelExists) {
+      // Cleanup intent is to retire exported events. Never promote a complete.
       for (const tmp of tmps) {
-        if (tmp.kind !== "complete") {
-          this.unlinkQuietly(tmp.path);
-        }
+        this.unlinkRequired(tmp.path);
       }
+      this.fsyncParentDirectoryOrThrow();
       return;
     }
-    for (const tmp of this.listTmpFiles()) {
-      this.unlinkQuietly(tmp.path);
+    if (tmps.length === 0) return;
+    if (!finalExists && complete.length === 1 && complete[0]) {
+      fs.renameSync(complete[0].path, this.walFilePath);
+      this.fsyncParentDirectoryOrThrow();
+    } else if (!finalExists && complete.length > 1) {
+      this.walWriteErrorCount += 1;
+      throw new Error(
+        `Refusing to promote leftover WAL complete files for "${this.walFilePath}": multiple complete temps are present`,
+      );
     }
+    for (const tmp of this.listTmpFiles()) {
+      this.unlinkRequired(tmp.path);
+    }
+    this.fsyncParentDirectoryOrThrow();
+  }
+
+  private clearCleanupSentinelAfterRecover(): void {
+    if (!this.walFilePath) return;
+    const sentinel = walCleanupSentinelPath(this.walFilePath);
+    if (!fs.existsSync(sentinel)) return;
+    this.unlinkRequired(sentinel);
+    this.fsyncParentDirectoryOrThrow();
   }
 
   private recoverFromWal(): void {
     if (!this.walFilePath) return;
+    let raw: string;
     try {
       if (!fs.existsSync(this.walFilePath)) return;
-      const lines = fs.readFileSync(this.walFilePath, "utf8").split("\n").filter(Boolean);
-      for (const line of lines) {
-        try {
-          const evt = JSON.parse(line) as TelemetryEvent;
-          if (this.queue.length >= this.maxQueueItems) {
-            const evicted = this.queue.shift();
-            this.recordDrop("max_queue_items", evicted);
-          }
-          this.queue.push(evt);
-        } catch {
-          // Ignore corrupt trailing line while preserving valid prior records
-          this.walWriteErrorCount += 1;
-        }
+      raw = fs.readFileSync(this.walFilePath, "utf8");
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+        return;
       }
-    } catch {
       this.walWriteErrorCount += 1;
+      throw error;
+    }
+    const lines = raw.split("\n").filter(Boolean);
+    for (const line of lines) {
+      try {
+        const evt = JSON.parse(line) as TelemetryEvent;
+        if (this.queue.length >= this.maxQueueItems) {
+          const evicted = this.queue.shift();
+          this.recordDrop("max_queue_items", evicted);
+        }
+        this.queue.push(evt);
+      } catch {
+        // Ignore corrupt trailing line while preserving valid prior records
+        this.walWriteErrorCount += 1;
+      }
     }
   }
 
   private fsyncParentDirectory(): void {
+    try {
+      this.fsyncParentDirectoryOrThrow();
+    } catch {
+      this.walDirFsyncErrorCount += 1;
+    }
+  }
+
+  private fsyncParentDirectoryOrThrow(): void {
     if (!this.walFilePath) return;
     const dir = path.dirname(this.walFilePath);
     let fd: number | undefined;
@@ -342,8 +385,9 @@ export class BoundedTelemetryClient {
       fd = fs.openSync(dir, flags);
       fs.fsyncSync(fd);
       this.walDirFsyncCount += 1;
-    } catch {
+    } catch (error) {
       this.walDirFsyncErrorCount += 1;
+      throw error;
     } finally {
       if (fd !== undefined) {
         try {
@@ -351,6 +395,17 @@ export class BoundedTelemetryClient {
         } catch {
           // ignore
         }
+      }
+    }
+  }
+
+  private unlinkRequired(filePath: string): void {
+    try {
+      fs.unlinkSync(filePath);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+        this.walWriteErrorCount += 1;
+        throw error;
       }
     }
   }
@@ -385,7 +440,11 @@ export class BoundedTelemetryClient {
   }
 
   private persistWalAtomic(): void {
-    if (!this.walFilePath || !this.walEnabled || this.closed) return;
+    if (!this.walFilePath || this.closed) return;
+    if (this.walStatus === "io_failed") {
+      throw new TelemetryWalIoError(`WAL I/O has already failed for "${this.walFilePath}"`);
+    }
+    if (!this.walEnabled) return;
     try {
       fs.mkdirSync(path.dirname(this.walFilePath), { recursive: true });
       const content = this.evictUntilWithinWalBudget();
@@ -395,8 +454,8 @@ export class BoundedTelemetryClient {
       }
       const tmpPartial = `${this.walFilePath}.tmp.${process.pid}.partial`;
       const tmpComplete = `${this.walFilePath}.tmp.${process.pid}.complete`;
-      this.unlinkQuietly(tmpPartial);
-      this.unlinkQuietly(tmpComplete);
+      this.unlinkRequired(tmpPartial);
+      this.unlinkRequired(tmpComplete);
       const payload = Buffer.from(content, "utf8");
       const splitAt = Math.max(1, Math.min(payload.length, Math.floor(payload.length / 2)));
       const fd = fs.openSync(tmpPartial, "w", 0o600);
@@ -409,32 +468,58 @@ export class BoundedTelemetryClient {
         fs.closeSync(fd);
       }
       fs.renameSync(tmpPartial, tmpComplete);
-      this.fsyncParentDirectory();
+      this.fsyncParentDirectoryOrThrow();
       this.invokeHook("afterTmpMarkedComplete");
       fs.renameSync(tmpComplete, this.walFilePath);
       this.invokeHook("afterRename");
-      this.fsyncParentDirectory();
+      this.fsyncParentDirectoryOrThrow();
       this.invokeHook("afterParentDirFsync");
-    } catch {
-      this.walWriteErrorCount += 1;
+    } catch (error) {
+      this.markWalIoFailed(error);
+      throw new TelemetryWalIoError(`WAL write failed for "${this.walFilePath}"`, { cause: error });
     }
   }
 
+  private markWalIoFailed(error: unknown): void {
+    this.walWriteErrorCount += 1;
+    this.walStatus = "io_failed";
+    this.walEnabled = false;
+    void error;
+  }
+
   /**
-   * Durable cleanup of an empty queue: unlink the final WAL if it exists,
-   * discard leftover tmp files, then fsync the parent directory. Recovery after
-   * this commit must not resurrect exported events. Writing an empty file is
-   * intentionally avoided so absence of the WAL is the cleanup contract.
+   * Durable cleanup of an empty queue. Order is fail-closed against
+   * `.complete` resurrection:
+   * 1. Write and fsync a cleanup sentinel so recovery will not promote leftover completes.
+   * 2. Remove leftover tmp files, including `.complete`.
+   * 3. Unlink the final WAL.
+   * 4. Remove the sentinel.
+   * Writing an empty file is intentionally avoided so absence of the WAL is
+   * the cleanup contract. send success alone is not this commit; the WAL
+   * lifecycle completes only after this durable cleanup.
    */
   private commitEmptyWal(): void {
     if (!this.walFilePath) return;
+    const sentinel = walCleanupSentinelPath(this.walFilePath);
+    const fd = fs.openSync(sentinel, "w", 0o600);
+    try {
+      fs.writeSync(fd, '{"reason":"post-send-empty-cleanup"}\n', 0, "utf8");
+      fs.fsyncSync(fd);
+    } finally {
+      fs.closeSync(fd);
+    }
+    this.fsyncParentDirectoryOrThrow();
+    this.invokeHook("afterCleanupSentinel");
+    for (const tmp of this.listTmpFiles()) {
+      this.unlinkRequired(tmp.path);
+    }
+    this.fsyncParentDirectoryOrThrow();
+    this.invokeHook("afterCleanupTmpsRemoved");
     if (fs.existsSync(this.walFilePath)) {
       fs.unlinkSync(this.walFilePath);
     }
-    for (const tmp of this.listTmpFiles()) {
-      this.unlinkQuietly(tmp.path);
-    }
-    this.fsyncParentDirectory();
+    this.unlinkRequired(sentinel);
+    this.fsyncParentDirectoryOrThrow();
     this.invokeHook("afterParentDirFsync");
     this.invokeHook("afterDurableCleanup");
   }
@@ -466,6 +551,14 @@ export class BoundedTelemetryClient {
   }
 
   enqueue(event: TelemetryEvent): void {
+    if (this.walStatus === "io_failed") {
+      this.recordDrop("enqueue_error", event);
+      throw new TelemetryWalIoError(
+        this.walFilePath
+          ? `WAL I/O has already failed for "${this.walFilePath}"`
+          : "WAL I/O has already failed",
+      );
+    }
     try {
       const sanitized: TelemetryEvent = {
         ...event,
@@ -488,7 +581,10 @@ export class BoundedTelemetryClient {
       }
       this.queue.push(sanitized);
       this.persistWalAtomic();
-    } catch {
+    } catch (error) {
+      if (error instanceof TelemetryWalIoError) {
+        throw error;
+      }
       this.recordDrop("enqueue_error", event);
     }
   }
@@ -503,7 +599,17 @@ export class BoundedTelemetryClient {
   }
 
   private async flushSerialized(): Promise<void> {
-    if (this.closed || this.queue.length === 0) {
+    if (this.closed) {
+      return;
+    }
+    if (this.walStatus === "io_failed") {
+      throw new TelemetryWalIoError(
+        this.walFilePath
+          ? `WAL I/O has already failed for "${this.walFilePath}"`
+          : "WAL I/O has already failed",
+      );
+    }
+    if (this.queue.length === 0) {
       return;
     }
     const batch = this.queue.splice(0, this.queue.length);
@@ -511,14 +617,15 @@ export class BoundedTelemetryClient {
     try {
       await this.transport.send(batch);
       this.invokeHook("afterTransportSend");
-      this.exportedCount += batch.length;
       this.removeInFlightBatch(batch);
       // Persist only after send succeeds. Remaining queue may contain events
       // enqueued during send; persist (or unlink) that snapshot. Unconfirmed
       // in-flight events stay in WAL snapshots until this point.
+      // exportedCount is increased only after durable cleanup/persist, because
+      // send success alone does not complete the WAL lifecycle.
       this.persistWalAtomic();
-    } catch {
-      this.exportErrorCount += 1;
+      this.exportedCount += batch.length;
+    } catch (error) {
       this.removeInFlightBatch(batch);
       for (const evt of batch) {
         if (this.queue.length >= this.maxQueueItems) {
@@ -527,6 +634,10 @@ export class BoundedTelemetryClient {
         }
         this.queue.push(evt);
       }
+      if (error instanceof TelemetryWalIoError) {
+        throw error;
+      }
+      this.exportErrorCount += 1;
       this.persistWalAtomic();
     }
   }
@@ -575,7 +686,7 @@ export class BoundedTelemetryClient {
       walDirFsyncCount: this.walDirFsyncCount,
       walDirFsyncErrorCount: this.walDirFsyncErrorCount,
       walBytes,
-      walStatus: this.walEnabled ? "enabled" : "disabled",
+      walStatus: this.walStatus,
       inFlightCount: this.inFlightEvents().length,
       recentDrops: this.dropAudit.slice(),
     };

@@ -8,7 +8,9 @@ import type { TelemetryEvent } from "../../packages/shared-contracts/src/index.j
 import {
   BoundedTelemetryClient,
   TelemetryWalInitError,
+  TelemetryWalIoError,
   TelemetryWalLockError,
+  walCleanupSentinelPath,
   type WalPersistStage,
 } from "../../packages/telemetry-sdk/src/index.js";
 import { ExclusiveWalLock } from "../../packages/telemetry-sdk/src/wal-lock.js";
@@ -68,6 +70,69 @@ function eventIdsFromWal(walPath: string): string[] {
   return ids;
 }
 
+function childArgs(): string[] {
+  return [
+    "--experimental-strip-types",
+    "--no-warnings=ExperimentalWarning",
+    "--import",
+    pathToFileURL(CHILD_REGISTER_PATH).href,
+    CHILD_PATH,
+  ];
+}
+
+function spawnWalChild(env: Record<string, string>): ChildProcess {
+  return spawn(process.execPath, childArgs(), {
+    env: { ...process.env, ...env },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+}
+
+async function waitForPath(filePath: string, timeoutMs = 8_000, child?: ChildProcess): Promise<void> {
+  const stderrChunks: Buffer[] = [];
+  const stdoutChunks: Buffer[] = [];
+  child?.stderr?.on("data", (c: Buffer) => stderrChunks.push(c));
+  child?.stdout?.on("data", (c: Buffer) => stdoutChunks.push(c));
+  await new Promise<void>((resolve, reject) => {
+    const poll = setInterval(() => {
+      if (fs.existsSync(filePath)) {
+        finish();
+        resolve();
+      }
+    }, 20);
+    const timer = setTimeout(() => {
+      finish();
+      reject(new Error(`Timed out waiting for ${filePath}`));
+    }, timeoutMs);
+    const onExit = (code: number | null, signal: string | null) => {
+      if (!fs.existsSync(filePath)) {
+        finish();
+        const stderr = Buffer.concat(stderrChunks).toString("utf8");
+        const stdout = Buffer.concat(stdoutChunks).toString("utf8");
+        reject(
+          new Error(
+            `child exited before ${filePath} (code=${code} signal=${signal})\nstdout:\n${stdout}\nstderr:\n${stderr}`,
+          ),
+        );
+      }
+    };
+    const finish = () => {
+      clearInterval(poll);
+      clearTimeout(timer);
+      child?.off("exit", onExit);
+    };
+    child?.once("exit", onExit);
+  });
+}
+
+async function killPid(pid: number | undefined): Promise<void> {
+  if (pid === undefined) return;
+  try {
+    process.kill(pid, "SIGKILL");
+  } catch {
+    // already gone
+  }
+}
+
 async function killChildAtStage(options: {
   walPath: string;
   mode: string;
@@ -77,6 +142,7 @@ async function killChildAtStage(options: {
   eventB?: string;
   holdLock?: boolean;
   transport?: "fail" | "ok";
+  extraEnv?: Record<string, string>;
 }): Promise<{ stageFile: string }> {
   const dir = path.dirname(options.walPath);
   const stageFile = path.join(dir, "stage.signal");
@@ -103,6 +169,7 @@ async function killChildAtStage(options: {
         WAL_EVENT_B: options.eventB ?? "evt_b",
         WAL_HOLD_LOCK: options.holdLock ? "1" : "0",
         WAL_TRANSPORT: options.transport ?? "ok",
+        ...(options.extraEnv ?? {}),
       },
       stdio: ["ignore", "pipe", "pipe"],
     },
@@ -643,11 +710,14 @@ describe("P0-2 Telemetry WAL crash recovery, lock, leftover tmp, and flush clean
     await flushDone;
   });
 
-  it("treats an empty lock file as contention and does not unlink it", () => {
+  it("treats an empty lock file as mid-init contention when a live holder already owns the socket", () => {
     const { walPath } = newWalDir();
-    const lockPath = ExclusiveWalLock.lockPathFor(walPath);
-    fs.mkdirSync(path.dirname(lockPath), { recursive: true });
-    fs.writeFileSync(lockPath, "", "utf8");
+    const held = ExclusiveWalLock.acquire(walPath);
+    expect(held.ok).toBe(true);
+    if (!held.ok) {
+      throw new Error("expected to acquire the live lock");
+    }
+    fs.writeFileSync(held.lock.path, "", "utf8");
     expect(
       () =>
         new BoundedTelemetryClient({
@@ -655,8 +725,25 @@ describe("P0-2 Telemetry WAL crash recovery, lock, leftover tmp, and flush clean
           transport: { async send() {} },
         }),
     ).toThrow(TelemetryWalLockError);
-    expect(fs.existsSync(lockPath)).toBe(true);
-    expect(fs.readFileSync(lockPath, "utf8")).toBe("");
+    expect(fs.existsSync(held.lock.path)).toBe(true);
+    expect(fs.readFileSync(held.lock.path, "utf8")).toBe("");
+    held.lock.close();
+  });
+
+  it("overwrites a leftover empty lock cookie when no live holder exists", () => {
+    const { walPath } = newWalDir();
+    const lockPath = ExclusiveWalLock.lockPathFor(walPath);
+    fs.mkdirSync(path.dirname(lockPath), { recursive: true });
+    fs.writeFileSync(lockPath, "", "utf8");
+    const client = track(
+      new BoundedTelemetryClient({
+        walFilePath: walPath,
+        transport: { async send() {} },
+      }),
+    );
+    expect(client.getMetrics().walStatus).toBe("enabled");
+    const payload = JSON.parse(fs.readFileSync(lockPath, "utf8")) as { pid: number };
+    expect(payload.pid).toBe(process.pid);
   });
 
   it("does not unlink a lock file that no longer belongs to the releasing holder", () => {
@@ -691,5 +778,191 @@ describe("P0-2 Telemetry WAL crash recovery, lock, leftover tmp, and flush clean
       }),
     );
     expect(memoryOnly.getMetrics().walStatus).toBe("disabled");
+  });
+
+  it("does not let two live child processes both hold the same WAL lock", async () => {
+    const { walPath, dir } = newWalDir();
+    const holderReady = path.join(dir, "holder.ready");
+    const holder = spawnWalChild({
+      WAL_PATH: walPath,
+      WAL_MODE: "race-acquire",
+      WAL_READY_FILE: holderReady,
+      WAL_RESULT_FILE: path.join(dir, "holder.result"),
+      WAL_HOLD_LOCK: "1",
+    });
+    try {
+      await waitForPath(holderReady, 8_000, holder);
+      const challengerResult = path.join(dir, "challenger.result");
+      const challengerReady = path.join(dir, "challenger.ready");
+      const goFile = path.join(dir, "challenger.go");
+      fs.writeFileSync(goFile, "go\n", "utf8");
+      const challenger = spawnWalChild({
+        WAL_PATH: walPath,
+        WAL_MODE: "race-acquire",
+        WAL_READY_FILE: challengerReady,
+        WAL_RESULT_FILE: challengerResult,
+        WAL_GO_FILE: goFile,
+      });
+      try {
+        await waitForPath(challengerResult, 8_000, challenger);
+        const result = JSON.parse(fs.readFileSync(challengerResult, "utf8")) as {
+          ok: boolean;
+          name?: string;
+        };
+        expect(result.ok).toBe(false);
+        expect(result.name).toBe("TelemetryWalLockError");
+      } finally {
+        await killPid(challenger.pid);
+      }
+    } finally {
+      await killPid(holder.pid);
+    }
+  });
+
+  it("does not allow two concurrent stale recoverers to become live holders of the same WAL", async () => {
+    const { walPath, dir } = newWalDir();
+    const setup = track(
+      new BoundedTelemetryClient({
+        walFilePath: walPath,
+        transport: { async send() {} },
+      }),
+    );
+    setup.enqueue(makeEvent("evt_stale_race"));
+    setup.close();
+    await killChildAtStage({ walPath, mode: "enqueue", holdLock: true });
+    expect(eventIdsFromWal(walPath)).toEqual(["evt_stale_race"]);
+
+    const goFile = path.join(dir, "race.go");
+    const children = [0, 1].map((i) => {
+      const ready = path.join(dir, `racer-${i}.ready`);
+      const result = path.join(dir, `racer-${i}.result`);
+      const child = spawnWalChild({
+        WAL_PATH: walPath,
+        WAL_MODE: "race-acquire",
+        WAL_READY_FILE: ready,
+        WAL_RESULT_FILE: result,
+        WAL_GO_FILE: goFile,
+        WAL_HOLD_LOCK: "1",
+      });
+      return { child, ready, result };
+    });
+    try {
+      await Promise.all(children.map((c) => waitForPath(c.ready, 8_000, c.child)));
+      fs.writeFileSync(goFile, "go\n", "utf8");
+      await Promise.all(children.map((c) => waitForPath(c.result, 8_000, c.child)));
+      const results = children.map((c) => JSON.parse(fs.readFileSync(c.result, "utf8")) as { ok: boolean; pid: number });
+      expect(results.filter((r) => r.ok)).toHaveLength(1);
+      expect(results.filter((r) => !r.ok)).toHaveLength(1);
+    } finally {
+      await Promise.all(children.map((c) => killPid(c.child.pid)));
+    }
+  });
+
+  it("does not unlink a replaced lock cookie in the close() TOCTOU window", async () => {
+    const { walPath, dir } = newWalDir();
+    const readyFile = path.join(dir, "toctou.ready");
+    const stageFile = path.join(dir, "toctou.stage");
+    const goFile = path.join(dir, "toctou.go");
+    const goClose = path.join(dir, "toctou.go-close");
+    const resultFile = path.join(dir, "toctou.result");
+    const lockPath = ExclusiveWalLock.lockPathFor(walPath);
+    const child = spawnWalChild({
+      WAL_PATH: walPath,
+      WAL_MODE: "close-toctou",
+      WAL_READY_FILE: readyFile,
+      WAL_STAGE_FILE: stageFile,
+      WAL_GO_FILE: goFile,
+      WAL_GO_CLOSE: goClose,
+      WAL_RESULT_FILE: resultFile,
+    });
+    try {
+      await waitForPath(readyFile, 8_000, child);
+      fs.writeFileSync(goClose, "close\n", "utf8");
+      await waitForPath(stageFile, 8_000, child);
+      const foreign = { pid: 1, starttime: "not-ours", createdAt: "2026-11-28T00:00:00.000Z" };
+      fs.writeFileSync(lockPath, `${JSON.stringify(foreign)}\n`, "utf8");
+      fs.writeFileSync(goFile, "go\n", "utf8");
+      await waitForPath(resultFile, 8_000, child);
+      expect(fs.existsSync(lockPath)).toBe(true);
+      expect(JSON.parse(fs.readFileSync(lockPath, "utf8"))).toEqual(foreign);
+    } finally {
+      await killPid(child.pid);
+    }
+  });
+
+  it("does not promote a leftover .complete of an already-exported batch when a cleanup sentinel is present", () => {
+    const { walPath } = newWalDir();
+    const evt = makeEvent("evt_exported_complete");
+    fs.writeFileSync(walPath + ".tmp.1.exported.complete", `${JSON.stringify(evt)}\n`, "utf8");
+    fs.writeFileSync(walCleanupSentinelPath(walPath), '{"reason":"post-send-empty-cleanup"}\n', "utf8");
+    expect(fs.existsSync(walPath)).toBe(false);
+    const recovered = track(
+      new BoundedTelemetryClient({
+        walFilePath: walPath,
+        transport: { async send() {} },
+      }),
+    );
+    expect(recovered.getMetrics().queuedCount).toBe(0);
+    expect(fs.existsSync(walPath)).toBe(false);
+    expect(listTmps(walPath).some((p) => p.endsWith(".complete"))).toBe(false);
+    expect(fs.existsSync(walCleanupSentinelPath(walPath))).toBe(false);
+  });
+
+  it("does not resurrect exported events when SIGKILL hits the post-send cleanup window with a leftover .complete and missing final WAL", async () => {
+    const { walPath } = newWalDir();
+    await killChildAtStage({
+      walPath,
+      mode: "flush-success",
+      pauseAt: "afterCleanupSentinel",
+      eventA: "evt_cleanup_window",
+      extraEnv: {
+        WAL_PLANT_STALE_COMPLETE: "1",
+        WAL_UNLINK_FINAL_IN_HOOK: "1",
+      },
+    });
+    // The production cleanup writes the sentinel before removing temps or the
+    // final WAL. The child also plants a leftover complete of the exported
+    // batch and unlinks the final file in that hook, which is the dangerous
+    // combination the previous order could leave behind.
+    expect(fs.existsSync(walCleanupSentinelPath(walPath))).toBe(true);
+    expect(fs.existsSync(walPath)).toBe(false);
+    expect(listTmps(walPath).some((p) => p.endsWith(".complete"))).toBe(true);
+
+    const recovered = track(
+      new BoundedTelemetryClient({
+        walFilePath: walPath,
+        transport: {
+          async send() {
+            throw new Error("must_not_resend_exported_batch");
+          },
+        },
+      }),
+    );
+    expect(recovered.getMetrics().queuedCount).toBe(0);
+    await recovered.flush();
+    expect(recovered.getMetrics().exportedCount).toBe(0);
+    expect(fs.existsSync(walPath)).toBe(false);
+    expect(listTmps(walPath)).toEqual([]);
+  });
+
+  it("fails closed on WAL write errors after a successful initialization", () => {
+    const { dir, walPath } = newWalDir();
+    const client = track(
+      new BoundedTelemetryClient({
+        walFilePath: walPath,
+        transport: { async send() {} },
+      }),
+    );
+    client.enqueue(makeEvent("evt_before_io_fail"));
+    expect(client.getMetrics().walStatus).toBe("enabled");
+    fs.chmodSync(dir, 0o555);
+    try {
+      expect(() => client.enqueue(makeEvent("evt_after_io_fail"))).toThrow(TelemetryWalIoError);
+      expect(client.getMetrics().walStatus).toBe("io_failed");
+      expect(() => client.enqueue(makeEvent("evt_after_sticky_fail"))).toThrow(TelemetryWalIoError);
+    } finally {
+      fs.chmodSync(dir, 0o755);
+    }
+    expect(eventIdsFromWal(walPath)).toEqual(["evt_before_io_fail"]);
   });
 }, 15_000);
