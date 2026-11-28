@@ -9,7 +9,8 @@
 - **上一轮最终 HEAD（历史，不得当作本轮验收证据）**：`b72ec70eef681e72e723a2af8e784e1496c49add`（CI run [46127466291](https://github.com/flykingvip-cloud/ai-optimization/actions/runs/46127466291) **仅证明**该 SHA，完成于 2026-11-28 16:48:01 CST。不得作为本轮验收证据。）
 - **本轮代码与测试提交**：`fb53e6ca5c919c6d52bed40f6a85b00b66923e29`（与任何文档提交都是不同的 SHA）
 - **冻结前文档 HEAD**：`8789bf29c955611455f6b618ecf20718d9d193da`（CI run [46129328336](https://github.com/flykingvip-cloud/ai-optimization/actions/runs/46129328336) **仅证明**该 SHA，完成于 2026-11-28 17:12:22 CST）。本冻结文档提交一旦存在，**不得再把 `8789bf2` 称为当前最终 HEAD**。
-- **本冻结文档提交**：推送后将产生一个不同于 `8789bf2` 的新文档 HEAD。该新 HEAD 必须有自己的 CI run，不得把 run `46129328336` 或 `46129186635` 当作新 HEAD 的核验。
+- **冻结正文文档提交**：`a5eff7789e35d42e8d4a39f0ec855f74c3942a75`（CI run [46130161924](https://github.com/flykingvip-cloud/ai-optimization/actions/runs/46130161924) **仅证明**该 SHA，完成于 2026-11-28 17:22:47 CST）。记录冻结结论的正文；代码提交 `fb53e6c` 与该文档提交是不同 SHA。
+- **本 CI 记录提交 / 新的最终文档 HEAD**：在 `a5eff77` 之后另有一次仅记录其 CI 的文档提交。该提交一旦存在，**不得再把 `a5eff77` 或 `8789bf2` 称为当前最终 HEAD**。新 HEAD 必须有自己的 CI run，不得把 run `46130161924`、`46129328336` 或 `46129186635` 当作新 HEAD 的核验。
 - **工程结论**：P0-2 工程实现与测试完成（**仅 Engineering Complete**）。这不是合并授权，不是 Integration Accepted，也不是 Production Accepted。
 - **记录日期**：2026-11-28（Asia/Shanghai，UTC+8）。负责人于 2026-11-28 17:17 CST 授权本轮只做证据归档与门禁冻结；只读核验完成于 2026-11-28 17:21 CST。
 - **生产准入**：保持关闭
@@ -44,7 +45,8 @@
 | 上一轮最终 HEAD | `b72ec70eef681e72e723a2af8e784e1496c49add` | 同上 66 个测试（文档记录提交） | Run [46127466291](https://github.com/flykingvip-cloud/ai-optimization/actions/runs/46127466291) success，完成于 2026-11-28 16:48:01 CST（Asia/Shanghai） | **仅证明 `b72ec70`。** 不得当作本轮 `listTmpFiles` 修复的核验。 |
 | 本轮代码与测试 | `fb53e6ca5c919c6d52bed40f6a85b00b66923e29` | 见第 6 节：9 个文件 / 71 个测试（2026-11-28 17:09:05 CST）。**这是该提交上的执行记录，不是独立复现。** | Run [46129186635](https://github.com/flykingvip-cloud/ai-optimization/actions/runs/46129186635) success，完成于 2026-11-28 17:10:33 CST（Asia/Shanghai）。**仅证明 `fb53e6c`。** | 本轮 `listTmpFiles()` 非 ENOENT 目录读取错误 fail-closed 修复与故障注入测试。已核验它是 `8789bf2` 的祖先。 |
 | 冻结前文档 HEAD | `8789bf29c955611455f6b618ecf20718d9d193da` | 文档记录提交，不含新的测试执行 | Run [46129328336](https://github.com/flykingvip-cloud/ai-optimization/actions/runs/46129328336) success，完成于 2026-11-28 17:12:22 CST（Asia/Shanghai）。**仅证明 `8789bf2`。** | 记录 `fb53e6c` 修复与其 CI 的文档提交。代码提交与该文档提交是两个不同 SHA。本冻结提交出现后，不得再称其为当前最终 HEAD。 |
-| 本冻结文档提交 / 新的文档 HEAD | 本文件本次提交（推送后的新 HEAD，完整 SHA 见提交后记录与第 7 节） | 本轮未重新执行 `pnpm run check`，不覆盖、不改标 `fb53e6c` 在 17:09:05 CST 的执行记录 | **不得**使用 run `46129328336`（仅证明 `8789bf2`）、`46129186635`（仅证明 `fb53e6c`）或 `46127466291`（仅证明 `b72ec70`）。必须等待并引用新 HEAD 自己的 verify run。 | 只做证据归档与门禁冻结，不修改代码或测试 |
+| 冻结正文文档提交 | `a5eff7789e35d42e8d4a39f0ec855f74c3942a75` | 本轮未重新执行 `pnpm run check`，不覆盖、不改标 `fb53e6c` 在 17:09:05 CST 的执行记录 | Run [46130161924](https://github.com/flykingvip-cloud/ai-optimization/actions/runs/46130161924) success，完成于 2026-11-28 17:22:47 CST（Asia/Shanghai）。**仅证明 `a5eff77`。** | 工程验收冻结正文。已核验 `fb53e6c` 与 `8789bf2` 都是它的祖先。本 CI 记录提交出现后，不得再称其为当前最终 HEAD。 |
+| 本 CI 记录提交 / 新的最终文档 HEAD | 本文件本次提交（推送后的新 HEAD） | 同上：未重新执行测试 | **不得**使用 run `46130161924`（仅证明 `a5eff77`）、`46129328336`（仅证明 `8789bf2`）、`46129186635`（仅证明 `fb53e6c`）或 `46127466291`（仅证明 `b72ec70`）。必须等待并引用新 HEAD 自己的 verify run，并写入 PR 描述。 | 仅把 `a5eff77` 的 CI 记入报告，不修改代码或测试 |
 
 2026-11-28 17:21 CST 只读核验（与预期一致，无待核实项）：PR #4 当时 HEAD 为 `8789bf29c955611455f6b618ecf20718d9d193da`，状态 OPEN、未合并、`MERGEABLE` / `CLEAN`。GitHub 记录的 PR base SHA 为 `c5779f20c8f9011396cd0aea299f8c2b9cd9e240`（分支建立时的 `main`，也是与当前 `origin/main` `16b01d99d33b386102bb9b2b248558eb5517e245` 的 merge-base）。`git merge-base --is-ancestor` 确认 `fb53e6c` 是 `8789bf2` 的祖先。Run `46129186635` 的 `headSha` 等于 `fb53e6c` 全长 SHA，`pull_request` / job `verify`（140930402553）success，作业完成于 2026-11-28 17:10:33 CST。Run `46129328336` 的 `headSha` 等于 `8789bf2` 全长 SHA，`pull_request` / job `verify`（140930833612）success，作业完成于 2026-11-28 17:12:21 CST，run 完成于 17:12:22 CST。相对 base 的变更文件仍为 9 个：本报告、`packages/telemetry-sdk/src/index.ts`、`packages/telemetry-sdk/src/wal-lock.ts`、三份 crash-recovery 测试辅助文件、`tests/integration/telemetry-wal-crash-recovery.test.ts`、`tests/integration/persistence-wal-perf.test.ts`、`tests/m4-sandbox/m4-full-sandbox-e2e.test.ts`。
 
@@ -203,7 +205,18 @@ PR：https://github.com/flykingvip-cloud/ai-optimization/pull/4 （OPEN，**未�
 - Workflow：`CI` / Job：`verify`（job id `140930833612`）
 - 结论：`success`
 - 作业完成时间：2026-11-28 17:12:21 CST（Asia/Shanghai）；run 完成时间：2026-11-28 17:12:22 CST（Asia/Shanghai）
-- **该 run 只证明 `8789bf2`。** 本冻结文档提交会产生新的最终文档 HEAD，不得把 run `46129328336` 或 `46129186635` 当作新 HEAD 的核验。新 HEAD 的 run id、URL、结论、完成时间与完整 SHA 将在该 run 成功后记录于后续文档提交和/或 PR 描述，并区分哪一次 run 证明哪一个 SHA。
+- **该 run 只证明 `8789bf2`。** 不得把该 run 当作 `a5eff77` 或其后文档 HEAD 的核验。
+
+**冻结正文文档提交已核验（不得再称为当前最终 HEAD）：**
+
+- SHA：`a5eff7789e35d42e8d4a39f0ec855f74c3942a75`
+- Run：https://github.com/flykingvip-cloud/ai-optimization/actions/runs/46130161924
+- Job：https://github.com/flykingvip-cloud/ai-optimization/actions/runs/46130161924/job/140933323641
+- Event：`pull_request`
+- Workflow：`CI` / Job：`verify`（job id `140933323641`）
+- 结论：`success`
+- 作业/run 完成时间：2026-11-28 17:22:47 CST（Asia/Shanghai）
+- **该 run 只证明 `a5eff77`。** 本 CI 记录提交会产生新的最终文档 HEAD，不得把 run `46130161924`、`46129328336` 或 `46129186635` 当作新 HEAD 的核验。新 HEAD 的 run id、URL、结论、完成时间与完整 SHA 写入 PR 描述，并区分哪一次 run 证明哪一个 SHA。
 
 CI 成功只证明工程检查通过。它不是生产验收，也不是合并或部署授权。
 
@@ -225,7 +238,7 @@ CI 成功只证明工程检查通过。它不是生产验收，也不是合并�
 
 | 门禁 | 含义 | 冻结结论 |
 | --- | --- | --- |
-| Engineering Complete | WAL 锁、崩溃恢复、cleanup sentinel、I/O fail-closed（含 `listTmpFiles()` 对非 ENOENT 目录读取错误 fail-closed）、对应测试及可对应 SHA 的 CI 已完成 | **通过（仅此门禁）。** 依据：代码与测试提交 `fb53e6ca5c919c6d52bed40f6a85b00b66923e29`；该 SHA 上的执行记录为 9 个文件 / 71 个测试（2026-11-28 17:09:05 CST，不是独立复现）；CI run [46129186635](https://github.com/flykingvip-cloud/ai-optimization/actions/runs/46129186635) 仅证明该代码 SHA。冻结前文档 HEAD `8789bf2` 由 run [46129328336](https://github.com/flykingvip-cloud/ai-optimization/actions/runs/46129328336) 证明，不得再称为当前最终 HEAD。本冻结文档提交后的新 HEAD 必须引用其自己的 CI，不得沿用上述 run，更不得沿用仅证明 `b72ec70` 的 run 46127466291。通过本门禁 **不是** 合并授权。 |
+| Engineering Complete | WAL 锁、崩溃恢复、cleanup sentinel、I/O fail-closed（含 `listTmpFiles()` 对非 ENOENT 目录读取错误 fail-closed）、对应测试及可对应 SHA 的 CI 已完成 | **通过（仅此门禁）。** 依据：代码与测试提交 `fb53e6ca5c919c6d52bed40f6a85b00b66923e29`；该 SHA 上的执行记录为 9 个文件 / 71 个测试（2026-11-28 17:09:05 CST，不是独立复现）；CI run [46129186635](https://github.com/flykingvip-cloud/ai-optimization/actions/runs/46129186635) 仅证明该代码 SHA。冻结前文档 HEAD `8789bf2` 由 run [46129328336](https://github.com/flykingvip-cloud/ai-optimization/actions/runs/46129328336) 证明，不得再称为当前最终 HEAD。冻结正文 `a5eff77` 由 run [46130161924](https://github.com/flykingvip-cloud/ai-optimization/actions/runs/46130161924) 证明，本 CI 记录提交出现后也不得再称为当前最终 HEAD。新的最终文档 HEAD 必须引用其自己的 CI，不得沿用上述 run，更不得沿用仅证明 `b72ec70` 的 run 46127466291。通过本门禁 **不是** 合并授权。 |
 | Integration Accepted | 真实 OpenBot 遥测接入和目标基础设施验证通过 | **未通过。** 尚未完成真实 OpenBot 遥测集成和目标基础设施验证。 |
 | Production Accepted | 生产环境安全、可靠性和运维验收全部通过 | **未通过。** 未进行生产环境安全、可靠性和运维验收。生产准入保持关闭。 |
 
