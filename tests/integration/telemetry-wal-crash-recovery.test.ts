@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { TelemetryEvent } from "../../packages/shared-contracts/src/index.js";
 import {
   BoundedTelemetryClient,
@@ -24,6 +24,7 @@ afterEach(() => {
   while (openClients.length > 0) {
     openClients.pop()?.close();
   }
+  vi.restoreAllMocks();
 });
 
 function makeEvent(id: string): TelemetryEvent {
@@ -58,6 +59,38 @@ function listTmps(walPath: string): string[] {
     .readdirSync(dir)
     .filter((name) => name.startsWith(prefix))
     .map((name) => path.join(dir, name));
+}
+
+function injectedReaddirError(code: string): NodeJS.ErrnoException {
+  const error = new Error(`injected readdir ${code}`) as NodeJS.ErrnoException;
+  error.code = code;
+  return error;
+}
+
+function mockReaddirFault(
+  dir: string,
+  options: { readonly code: string; readonly when?: (callIndex: number) => boolean },
+): { restore(): void } {
+  const target = path.resolve(dir);
+  const original = fs.readdirSync.bind(fs);
+  let calls = 0;
+  const spy = vi.spyOn(fs, "readdirSync").mockImplementation(((
+    p: fs.PathLike,
+    opts?: Parameters<typeof fs.readdirSync>[1],
+  ) => {
+    if (path.resolve(String(p)) === target) {
+      calls += 1;
+      if (!options.when || options.when(calls)) {
+        throw injectedReaddirError(options.code);
+      }
+    }
+    return original(p, opts as never);
+  }) as typeof fs.readdirSync);
+  return {
+    restore() {
+      spy.mockRestore();
+    },
+  };
 }
 
 function eventIdsFromWal(walPath: string): string[] {
@@ -964,5 +997,138 @@ describe("P0-2 Telemetry WAL crash recovery, lock, leftover tmp, and flush clean
       fs.chmodSync(dir, 0o755);
     }
     expect(eventIdsFromWal(walPath)).toEqual(["evt_before_io_fail"]);
+  });
+
+  it("fails closed when init-time readdirSync returns EIO and does not mark the WAL enabled", () => {
+    const { dir, walPath } = newWalDir();
+    fs.writeFileSync(`${walPath}.tmp.init.complete`, '{"eventId":"evt_leftover"}\n', { mode: 0o600 });
+    const fault = mockReaddirFault(dir, { code: "EIO" });
+    try {
+      expect(() =>
+        new BoundedTelemetryClient({
+          walFilePath: walPath,
+          transport: { async send() {} },
+        }),
+      ).toThrow(TelemetryWalInitError);
+    } finally {
+      fault.restore();
+    }
+    // No constructed client exists, so the WAL cannot have been marked enabled.
+    expect(fs.existsSync(`${walPath}.tmp.init.complete`)).toBe(true);
+  });
+
+  it("fails closed when init-time readdirSync returns EACCES and does not treat leftover temps as an empty directory", () => {
+    const { dir, walPath } = newWalDir();
+    const leftover = `${walPath}.tmp.init.complete`;
+    fs.writeFileSync(leftover, `${JSON.stringify({ eventId: "evt_hidden_complete" })}\n`, { mode: 0o600 });
+    const fault = mockReaddirFault(dir, { code: "EACCES" });
+    try {
+      expect(() =>
+        new BoundedTelemetryClient({
+          walFilePath: walPath,
+          transport: { async send() {} },
+        }),
+      ).toThrow(TelemetryWalInitError);
+    } finally {
+      fault.restore();
+    }
+    expect(fs.existsSync(leftover)).toBe(true);
+  });
+
+  it("retains the cleanup sentinel when directory read fails during post-send cleanup", async () => {
+    const { dir, walPath } = newWalDir();
+    const client = track(
+      new BoundedTelemetryClient({
+        walFilePath: walPath,
+        transport: { async send() {} },
+      }),
+    );
+    client.enqueue(makeEvent("evt_cleanup_readdir"));
+    expect(client.getMetrics().walStatus).toBe("enabled");
+    const fault = mockReaddirFault(dir, { code: "EIO" });
+    try {
+      await expect(client.flush()).rejects.toBeInstanceOf(TelemetryWalIoError);
+      expect(client.getMetrics().walStatus).toBe("io_failed");
+      expect(fs.existsSync(walCleanupSentinelPath(walPath))).toBe(true);
+      expect(fs.existsSync(walPath)).toBe(true);
+      expect(eventIdsFromWal(walPath)).toEqual(["evt_cleanup_readdir"]);
+    } finally {
+      fault.restore();
+    }
+  });
+
+  it("does not delete the final WAL early or resurrect exported events when cleanup readdir fails with a leftover .complete", async () => {
+    const { dir, walPath } = newWalDir();
+    const staleComplete = `${walPath}.tmp.stale.complete`;
+    const client = track(
+      new BoundedTelemetryClient({
+        walFilePath: walPath,
+        transport: { async send() {} },
+        testHooks: {
+          onStage(stage: WalPersistStage) {
+            if (stage === "afterCleanupSentinel") {
+              fs.writeFileSync(
+                staleComplete,
+                `${JSON.stringify(makeEvent("evt_only_in_complete"))}\n`,
+                { mode: 0o600 },
+              );
+            }
+          },
+        },
+      }),
+    );
+    client.enqueue(makeEvent("evt_already_sent"));
+    const fault = mockReaddirFault(dir, { code: "EIO" });
+    try {
+      await expect(client.flush()).rejects.toBeInstanceOf(TelemetryWalIoError);
+      expect(fs.existsSync(walPath)).toBe(true);
+      expect(fs.existsSync(walCleanupSentinelPath(walPath))).toBe(true);
+      expect(fs.existsSync(staleComplete)).toBe(true);
+      expect(eventIdsFromWal(walPath)).toEqual(["evt_already_sent"]);
+    } finally {
+      fault.restore();
+    }
+    client.close();
+
+    const sent: string[] = [];
+    const recovered = track(
+      new BoundedTelemetryClient({
+        walFilePath: walPath,
+        transport: {
+          async send(batch) {
+            sent.push(...batch.map((event) => event.eventId));
+          },
+        },
+      }),
+    );
+    expect(recovered.getMetrics().walStatus).toBe("enabled");
+    expect(fs.existsSync(staleComplete)).toBe(false);
+    expect(eventIdsFromWal(walPath)).toEqual(["evt_already_sent"]);
+    expect(recovered.getMetrics().queuedCount).toBe(1);
+    await recovered.flush();
+    expect(sent).toEqual(["evt_already_sent"]);
+  });
+
+  it("exposes recovery failure when a later directory re-read fails and does not skip leftover state", () => {
+    const { dir, walPath } = newWalDir();
+    fs.writeFileSync(walPath, `${JSON.stringify(makeEvent("evt_recover_reread"))}\n`, { mode: 0o600 });
+    fs.writeFileSync(
+      `${walPath}.tmp.leftover.complete`,
+      `${JSON.stringify(makeEvent("evt_leftover_complete"))}\n`,
+      { mode: 0o600 },
+    );
+    const fault = mockReaddirFault(dir, { code: "EIO", when: (callIndex) => callIndex >= 2 });
+    try {
+      expect(() =>
+        new BoundedTelemetryClient({
+          walFilePath: walPath,
+          transport: { async send() {} },
+        }),
+      ).toThrow(TelemetryWalInitError);
+    } finally {
+      fault.restore();
+    }
+    expect(fs.existsSync(`${walPath}.tmp.leftover.complete`)).toBe(true);
+    expect(eventIdsFromWal(walPath)).toEqual(["evt_recover_reread"]);
   });
 }, 15_000);

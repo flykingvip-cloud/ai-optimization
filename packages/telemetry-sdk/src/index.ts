@@ -265,11 +265,17 @@ export class BoundedTelemetryClient {
     if (!this.walFilePath) return [];
     const dir = path.dirname(this.walFilePath);
     const prefix = path.basename(this.tmpPrefix());
-    let names: string[] = [];
+    let names: string[];
     try {
       names = fs.readdirSync(dir);
-    } catch {
-      return [];
+    } catch (error) {
+      // ENOENT means the directory is gone; treat that as no leftovers.
+      // Any other directory-read fault must fail closed so callers cannot
+      // mistake an I/O error for "no temp files".
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+        return [];
+      }
+      throw error;
     }
     const out: Array<{ path: string; kind: "partial" | "complete" | "other" }> = [];
     for (const name of names) {
