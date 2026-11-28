@@ -150,7 +150,16 @@ $ pnpm run check
 
 ## 6. CI
 
-本报告写入时 PR 尚未打开，CI run 尚未产生。PR 打开并在 `4174135` 或包含该提交的后续 HEAD 上出现 verify 结论后，应在本文件或后续记录中补上 run URL 与结论。在此之前不得把 CI 写成已通过。
+PR：https://github.com/flykingvip-cloud/ai-optimization/pull/4 （OPEN，`base=main`，**未合并**，未获合并授权）
+
+在包含代码提交 `417413563f79a02c94f363ad0e6471da7fe5ff15` 与本报告初稿的 HEAD `1c5c2ca1018d26b1f9f1bb7a1d1f0c6da2b50eb0` 上，GitHub Actions `CI / verify` 已成功：
+
+- Run：https://github.com/flykingvip-cloud/ai-optimization/actions/runs/46112441099
+- Job：https://github.com/flykingvip-cloud/ai-optimization/actions/runs/46112441099/job/140878768002
+- 结论：`success`（约 16s）
+- 完成时间：2026-11-28 13:31:09 CST（Asia/Shanghai）
+
+该 CI 成功只证明工程检查通过。它不是生产验收，也不是合并或部署授权。若本文件随后以新提交写入该分支，新 HEAD 的 CI 需另行查看，但不改变上述针对 `1c5c2ca` 的 run 记录。
 
 ---
 
@@ -171,7 +180,7 @@ $ pnpm run check
 
 | 门禁 | 含义 | 本轮结论 |
 | --- | --- | --- |
-| Engineering Complete | 代码、测试和（若已有）CI 证据通过 | **本分支本地检查已通过。** CI 与 PR 合并仍待记录/审批。这是本文件记录的唯一进行中层。 |
+| Engineering Complete | 代码、测试和（若已有）CI 证据通过 | **本分支本地检查已通过；针对 `1c5c2ca` 的 CI verify 已成功（run `46112441099`）。** PR 合并仍待单独审批。这是本文件记录的唯一进行中层。 |
 | Integration Accepted | 真实 IdP、跨仓调用和目标基础设施验证通过 | **未达到。** |
 | Production Accepted | 安全、可靠性、运维和发布门禁全部通过 | **未达到。** 生产准入保持关闭。 |
 
