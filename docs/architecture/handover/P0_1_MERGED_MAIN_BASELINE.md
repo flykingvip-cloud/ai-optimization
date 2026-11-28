@@ -12,6 +12,8 @@
 - P0-2：未启动，本轮不启动
 - 相关历史记录：`docs/architecture/handover/P0_1_ENGINEERING_BASELINE.md` 是合并前的工程完成基线（工程完成 SHA `b0de71b`，记录时 PR #2 仍为 OPEN）。本文件不改写该历史记录。
 
+- 第 1–6 节是 2026-11-28 对合并提交 `4e5cd8a047686eaec662332e5d50b646a46b2516` 的历史快照，不得因后续 `main` 前进而改写。第 7 节记录该快照之后的状态。
+
 ## 1. 负责人确认的状态表
 
 下列状态在 2026-11-28 对合并后 `main` 做只读核验后确认，不改变生产准入关闭的结论。
@@ -195,3 +197,22 @@ EXIT=0
 - 不授权启动 P0-2。
 - 自定义 `fetchFn` 路径的 SSRF 防护与默认出站路径不等价。
 - 合并后 `main` CI run `46093043457` 成功，只说明该 SHA 通过了现有自动化检查。
+
+## 7. 后续状态说明
+
+本节记录第 1–6 节历史快照之后的状态，不改写该快照，也不把后续变化写成该快照当日的核验结果。本节仍不是真实 IdP 联调通过证明，不是生产验收，也不是一次新的安全审查。
+
+快照记录之后，PR #1 作为独立审批项获得单独授权并已合并。
+
+- 合并提交：`c5779f20c8f9011396cd0aea299f8c2b9cd9e240`
+- 合并说明：`Merge pull request #1 from flykingvip-cloud/docs/phase0-handover-baseline`
+- 合并时间：2026-11-28 11:52:03 CST（Asia/Shanghai）（`2026-11-28T03:52:03Z`）
+- 父提交：`4e5cd8a047686eaec662332e5d50b646a46b2516` 与 `3f9e97ef49f45bf729786f0db7ffbbefa37371ff`
+- 该合并带入 `main` 的文件：`docs/architecture/handover/AGENT_HANDOVER_BASELINE_AUDIT.md`、`docs/architecture/handover/PHASE0_EXECUTION_PLAN.md`
+- 该合并提交推送到 `main` 的 CI：https://github.com/flykingvip-cloud/ai-optimization/actions/runs/46104874648 （工作流 `CI`，事件 `push`，作业 `verify`，结论 `success`，完成时间 2026-11-28T03:52:20Z = 2026-11-28 11:52:20 CST（Asia/Shanghai））
+
+截至本说明撰写时，`origin/main` HEAD 为 `c5779f20c8f9011396cd0aea299f8c2b9cd9e240`。这不改变第 1–6 节对合并提交 `4e5cd8a` 的历史快照，也不提升生产准入状态。生产准入保持关闭。Engineering Complete 仍是唯一已通过的门禁；Integration Accepted 与 Production Accepted 均未达到。
+
+本文件所在的 PR #3 仍未合并。
+
+同日稍后，负责人另外授权在独立功能分支上开展 P0-2 Telemetry WAL 工作（实现、测试，并开设 PR）。该授权不合并该 PR，不启动部署，也不开放生产准入。P0-2 不得被写成已完成，也不得被写成已在 `main` 上启动。该 PR 的合并、部署与生产接入仍须事先单独审批。生产准入保持关闭。
