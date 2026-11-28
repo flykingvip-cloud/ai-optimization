@@ -63,6 +63,8 @@ describe("P1-01/02/04 Persistence, Migrations, Disk WAL & Performance", () => {
     });
     client1.enqueue(evt);
     expect(fs.existsSync(walPath)).toBe(true);
+    // Simulate process restart: release the exclusive single-writer lock.
+    client1.close();
 
     const recovered: TelemetryEvent[] = [];
     const client2 = new BoundedTelemetryClient({
