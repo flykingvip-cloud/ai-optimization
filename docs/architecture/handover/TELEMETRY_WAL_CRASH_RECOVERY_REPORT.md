@@ -6,11 +6,14 @@
 - **PR**：https://github.com/flykingvip-cloud/ai-optimization/pull/4 （OPEN，`base=main`，**未合并**，未获合并授权）
 - **基线 `origin/main`（本分支建立时）**：`c5779f20c8f9011396cd0aea299f8c2b9cd9e240`
 - **当前 `origin/main`**：`16b01d99d33b386102bb9b2b248558eb5517e245`（PR #3 已合并；该合并不改变 PR #4 暂缓合并的判断，也不提升生产准入）
-- **上一轮最终 HEAD（历史，不得当作本轮核验）**：`b72ec70eef681e72e723a2af8e784e1496c49add`（CI run [46127466291](https://github.com/flykingvip-cloud/ai-optimization/actions/runs/46127466291) 仅证明该 SHA，完成于 2026-11-28 16:48:01 CST）
-- **本轮代码与测试提交**：`fb53e6ca5c919c6d52bed40f6a85b00b66923e29`
-- **记录日期**：2026-11-28（Asia/Shanghai，UTC+8）
+- **上一轮最终 HEAD（历史，不得当作本轮验收证据）**：`b72ec70eef681e72e723a2af8e784e1496c49add`（CI run [46127466291](https://github.com/flykingvip-cloud/ai-optimization/actions/runs/46127466291) **仅证明**该 SHA，完成于 2026-11-28 16:48:01 CST。不得作为本轮验收证据。）
+- **本轮代码与测试提交**：`fb53e6ca5c919c6d52bed40f6a85b00b66923e29`（与任何文档提交都是不同的 SHA）
+- **冻结前文档 HEAD**：`8789bf29c955611455f6b618ecf20718d9d193da`（CI run [46129328336](https://github.com/flykingvip-cloud/ai-optimization/actions/runs/46129328336) **仅证明**该 SHA，完成于 2026-11-28 17:12:22 CST）。本冻结文档提交一旦存在，**不得再把 `8789bf2` 称为当前最终 HEAD**。
+- **本冻结文档提交**：推送后将产生一个不同于 `8789bf2` 的新文档 HEAD。该新 HEAD 必须有自己的 CI run，不得把 run `46129328336` 或 `46129186635` 当作新 HEAD 的核验。
+- **工程结论**：P0-2 工程实现与测试完成（**仅 Engineering Complete**）。这不是合并授权，不是 Integration Accepted，也不是 Production Accepted。
+- **记录日期**：2026-11-28（Asia/Shanghai，UTC+8）。负责人于 2026-11-28 17:17 CST 授权本轮只做证据归档与门禁冻结；只读核验完成于 2026-11-28 17:21 CST。
 - **生产准入**：保持关闭
-- **本轮未执行**：合并本 PR、提交 `main`、部署、生产 IdP 接入、生产数据库变更、流量切换、在 GitHub 上批准该 PR、改动其他仓库
+- **本轮未执行**：修改 WAL 代码或测试、合并本 PR、提交 `main`、部署、生产 IdP 接入、生产数据库变更、流量切换、在 GitHub 上批准该 PR、改动其他仓库、启动下一阶段跨仓工作
 
 ---
 
@@ -39,8 +42,11 @@
 | 负责人 2026-11-28 16:34 决定前的 HEAD | `63279e6e311ec9d9042599ecc5169f26b51c13bc` | 9 个文件 / 59 个测试 | Run [46117273097](https://github.com/flykingvip-cloud/ai-optimization/actions/runs/46117273097) success，完成于 2026-11-28 14:35:27 CST（Asia/Shanghai） | **仅证明 `63279e6`。** 负责人决定：PR #4 保持 OPEN，不批准合并。 |
 | 上一轮代码（锁竞态 / 清理哨兵 / 初始化后 I/O） | `9d16bc0ae97e33a254d37984d74853c9f5ba3fd0` | 9 个文件 / 66 个测试（2026-11-28 16:45 CST） | 不得单独把更早 run 抄到该 SHA 上 | 上一轮三项修复的实现提交 |
 | 上一轮最终 HEAD | `b72ec70eef681e72e723a2af8e784e1496c49add` | 同上 66 个测试（文档记录提交） | Run [46127466291](https://github.com/flykingvip-cloud/ai-optimization/actions/runs/46127466291) success，完成于 2026-11-28 16:48:01 CST（Asia/Shanghai） | **仅证明 `b72ec70`。** 不得当作本轮 `listTmpFiles` 修复的核验。 |
-| 本轮代码与测试 | `fb53e6ca5c919c6d52bed40f6a85b00b66923e29` | 见第 6 节：9 个文件 / 71 个测试（2026-11-28 17:09:05 CST） | Run [46129186635](https://github.com/flykingvip-cloud/ai-optimization/actions/runs/46129186635) success，完成于 2026-11-28 17:10:33 CST（Asia/Shanghai）。**仅证明 `fb53e6c`。** | 本轮 `listTmpFiles()` fail-closed 修复与目录读取故障注入测试 |
-| 本报告更新及此后的最终 HEAD | 随后文档提交 | — | **必须引用最终推送 HEAD 自己的 run**，不得把 run `46129186635`（仅证明 `fb53e6c`）或 `46127466291`（仅证明 `b72ec70`）当成新 HEAD 的核验。见第 7 节；最终以 PR 描述为准。 | 文档提交可能使 HEAD 再前进 |
+| 本轮代码与测试 | `fb53e6ca5c919c6d52bed40f6a85b00b66923e29` | 见第 6 节：9 个文件 / 71 个测试（2026-11-28 17:09:05 CST）。**这是该提交上的执行记录，不是独立复现。** | Run [46129186635](https://github.com/flykingvip-cloud/ai-optimization/actions/runs/46129186635) success，完成于 2026-11-28 17:10:33 CST（Asia/Shanghai）。**仅证明 `fb53e6c`。** | 本轮 `listTmpFiles()` 非 ENOENT 目录读取错误 fail-closed 修复与故障注入测试。已核验它是 `8789bf2` 的祖先。 |
+| 冻结前文档 HEAD | `8789bf29c955611455f6b618ecf20718d9d193da` | 文档记录提交，不含新的测试执行 | Run [46129328336](https://github.com/flykingvip-cloud/ai-optimization/actions/runs/46129328336) success，完成于 2026-11-28 17:12:22 CST（Asia/Shanghai）。**仅证明 `8789bf2`。** | 记录 `fb53e6c` 修复与其 CI 的文档提交。代码提交与该文档提交是两个不同 SHA。本冻结提交出现后，不得再称其为当前最终 HEAD。 |
+| 本冻结文档提交 / 新的文档 HEAD | 本文件本次提交（推送后的新 HEAD，完整 SHA 见提交后记录与第 7 节） | 本轮未重新执行 `pnpm run check`，不覆盖、不改标 `fb53e6c` 在 17:09:05 CST 的执行记录 | **不得**使用 run `46129328336`（仅证明 `8789bf2`）、`46129186635`（仅证明 `fb53e6c`）或 `46127466291`（仅证明 `b72ec70`）。必须等待并引用新 HEAD 自己的 verify run。 | 只做证据归档与门禁冻结，不修改代码或测试 |
+
+2026-11-28 17:21 CST 只读核验（与预期一致，无待核实项）：PR #4 当时 HEAD 为 `8789bf29c955611455f6b618ecf20718d9d193da`，状态 OPEN、未合并、`MERGEABLE` / `CLEAN`。GitHub 记录的 PR base SHA 为 `c5779f20c8f9011396cd0aea299f8c2b9cd9e240`（分支建立时的 `main`，也是与当前 `origin/main` `16b01d99d33b386102bb9b2b248558eb5517e245` 的 merge-base）。`git merge-base --is-ancestor` 确认 `fb53e6c` 是 `8789bf2` 的祖先。Run `46129186635` 的 `headSha` 等于 `fb53e6c` 全长 SHA，`pull_request` / job `verify`（140930402553）success，作业完成于 2026-11-28 17:10:33 CST。Run `46129328336` 的 `headSha` 等于 `8789bf2` 全长 SHA，`pull_request` / job `verify`（140930833612）success，作业完成于 2026-11-28 17:12:21 CST，run 完成于 17:12:22 CST。相对 base 的变更文件仍为 9 个：本报告、`packages/telemetry-sdk/src/index.ts`、`packages/telemetry-sdk/src/wal-lock.ts`、三份 crash-recovery 测试辅助文件、`tests/integration/telemetry-wal-crash-recovery.test.ts`、`tests/integration/persistence-wal-perf.test.ts`、`tests/m4-sandbox/m4-full-sandbox-e2e.test.ts`。
 
 未改动 PR #3 worktree，也未改写 `docs/architecture/handover/P0_1_MERGED_MAIN_BASELINE.md`。
 
@@ -138,6 +144,8 @@
 
 ## 6. 本地检查（本轮 `listTmpFiles` 修复）
 
+**性质：执行记录，不是独立复现。** 下面的结果记录的是实现提交 `fb53e6ca5c919c6d52bed40f6a85b00b66923e29` 上一次已完成的 `pnpm run check`，不得改写成一次新的、独立的复现，也不得用本冻结文档轮次覆盖或改标该时间戳。本冻结轮次未重新执行测试。
+
 命令在仓库根目录、功能分支 `feat/p0-2-telemetry-wal`、实现提交 `fb53e6ca5c919c6d52bed40f6a85b00b66923e29` 上执行。
 
 环境：Node v24.22.1，pnpm v10.34.6。时间：2026-11-28 17:09:05 CST（Asia/Shanghai）。
@@ -158,7 +166,7 @@ $ pnpm run check
    Duration  3.25s
 ```
 
-TypeScript 类型检查通过。WAL 崩溃恢复、锁竞争、`.complete` 清理哨兵、并发 flush、容量控制和 in-flight batch 既有测试无回归。本轮新增 5 个目录读取故障注入测试全部通过。相对上一轮最终 HEAD `b72ec70` 的 9 个文件 / 66 个测试，本轮为 9 个文件 / 71 个测试。
+TypeScript 类型检查通过。WAL 崩溃恢复、锁竞争、`.complete` 清理哨兵、并发 flush、容量控制和 in-flight batch 既有测试无回归。本轮新增 5 个目录读取故障注入测试全部通过。相对上一轮最终 HEAD `b72ec70` 的 9 个文件 / 66 个测试，该次执行为 9 个文件 / 71 个测试。以上均为 `fb53e6c` 上 2026-11-28 17:09:05 CST 的执行记录，不是本冻结轮次的独立复现。
 
 ---
 
@@ -175,18 +183,27 @@ PR：https://github.com/flykingvip-cloud/ai-optimization/pull/4 （OPEN，**未�
 | `262c9efb55d5eb897cc9bbea81de90ee63114902` | https://github.com/flykingvip-cloud/ai-optimization/actions/runs/46127394214 | success（2026-11-28 16:47:08 CST）。仅证明 `262c9ef`。 |
 | `b72ec70eef681e72e723a2af8e784e1496c49add` | https://github.com/flykingvip-cloud/ai-optimization/actions/runs/46127466291 | success（2026-11-28 16:48:01 CST）。上一轮最终 HEAD，仅证明 `b72ec70`。 |
 
-**本轮代码与测试提交已核验：**
+**本轮代码与测试提交已核验（2026-11-28 17:21 CST 再次对照 GitHub 实况，关联一致）：**
 
 - SHA：`fb53e6ca5c919c6d52bed40f6a85b00b66923e29`
 - Run：https://github.com/flykingvip-cloud/ai-optimization/actions/runs/46129186635
 - Job：https://github.com/flykingvip-cloud/ai-optimization/actions/runs/46129186635/job/140930402553
 - Event：`pull_request`
-- Workflow：`CI` / Job：`verify`
+- Workflow：`CI` / Job：`verify`（job id `140930402553`）
 - 结论：`success`
-- 完成时间：2026-11-28 17:10:33 CST（Asia/Shanghai）
-- **该 run 只证明 `fb53e6c`。** 不得把 run `46127466291` 或更早的成功结果抄到本 SHA 上。
+- 作业/run 完成时间：2026-11-28 17:10:33 CST（Asia/Shanghai）
+- **该 run 只证明 `fb53e6c`。** 不得把 run `46127466291`（仅证明 `b72ec70`）或更早的成功结果抄到本 SHA 上。
 
-若本节随后以新的文档提交写入，新 HEAD 必须再查一次 CI。不得把 run `46129186635` 当成新 HEAD 的核验结论。最终以 GitHub 上该 PR 最新 HEAD 的 verify 作业为准，并写入 PR 描述。
+**冻结前文档 HEAD 已核验（不得再称为当前最终 HEAD）：**
+
+- SHA：`8789bf29c955611455f6b618ecf20718d9d193da`
+- Run：https://github.com/flykingvip-cloud/ai-optimization/actions/runs/46129328336
+- Job：https://github.com/flykingvip-cloud/ai-optimization/actions/runs/46129328336/job/140930833612
+- Event：`pull_request`
+- Workflow：`CI` / Job：`verify`（job id `140930833612`）
+- 结论：`success`
+- 作业完成时间：2026-11-28 17:12:21 CST（Asia/Shanghai）；run 完成时间：2026-11-28 17:12:22 CST（Asia/Shanghai）
+- **该 run 只证明 `8789bf2`。** 本冻结文档提交会产生新的最终文档 HEAD，不得把 run `46129328336` 或 `46129186635` 当作新 HEAD 的核验。新 HEAD 的 run id、URL、结论、完成时间与完整 SHA 将在该 run 成功后记录于后续文档提交和/或 PR 描述，并区分哪一次 run 证明哪一个 SHA。
 
 CI 成功只证明工程检查通过。它不是生产验收，也不是合并或部署授权。
 
@@ -200,16 +217,20 @@ CI 成功只证明工程检查通过。它不是生产验收，也不是合并�
 4. **send 成功还不等于 WAL 生命周期结束。** 只有完成后续耐久清理后，恢复才不会重放已导出事件。清理前崩溃可能重复投递，下游必须按 `idempotencyKey` 去重。
 5. 部分批次成功依赖下游按 `idempotencyKey` 去重；客户端会重试整批。
 6. 若 `fsync(dir)` 在 persist/cleanup 中失败，现在会进入 `io_failed` 并抛出；该失败本身不会回滚已经发生的 rename/unlink。
-7. 本轮未改 OIDC/JWKS、OpenBot、PostgreSQL、`M4_ACCEPTANCE_REPORT.md` 或对外 HTTP 契约。
+7. 真实生产 IdP、PostgreSQL 和 OpenBot 集成尚未验收。本轮未改 OIDC/JWKS、OpenBot、Knowledge SDK、PostgreSQL、`M4_ACCEPTANCE_REPORT.md` 或对外 HTTP 契约。
 
 ---
 
-## 9. 三层门禁（不得混淆）
+## 9. 三层门禁（冻结结论；三门互相独立，不得混淆）
 
-| 门禁 | 含义 | 本轮结论 |
+| 门禁 | 含义 | 冻结结论 |
 | --- | --- | --- |
-| Engineering Complete | 代码、测试和针对**当前最终 HEAD** 的 CI 证据通过 | **本轮代码 `fb53e6c` 的本地检查已通过（9 个文件 / 71 个测试，2026-11-28 17:09:05 CST）。针对 `fb53e6c` 的 CI verify 已成功（run `46129186635`，2026-11-28 17:10:33 CST）。验收项“初始化、恢复、清理阶段 I/O 错误均 fail-closed”已通过。** 若本文件再前进，须核验新 HEAD 的 CI，不得沿用 `fb53e6c` 的 run 46129186635，更不得沿用 `b72ec70` 的 run 46127466291。PR 合并仍待单独审批。 |
-| Integration Accepted | 真实 IdP、跨仓调用和目标基础设施验证通过 | **未达到。** |
-| Production Accepted | 安全、可靠性、运维和发布门禁全部通过 | **未达到。** 生产准入保持关闭。 |
+| Engineering Complete | WAL 锁、崩溃恢复、cleanup sentinel、I/O fail-closed（含 `listTmpFiles()` 对非 ENOENT 目录读取错误 fail-closed）、对应测试及可对应 SHA 的 CI 已完成 | **通过（仅此门禁）。** 依据：代码与测试提交 `fb53e6ca5c919c6d52bed40f6a85b00b66923e29`；该 SHA 上的执行记录为 9 个文件 / 71 个测试（2026-11-28 17:09:05 CST，不是独立复现）；CI run [46129186635](https://github.com/flykingvip-cloud/ai-optimization/actions/runs/46129186635) 仅证明该代码 SHA。冻结前文档 HEAD `8789bf2` 由 run [46129328336](https://github.com/flykingvip-cloud/ai-optimization/actions/runs/46129328336) 证明，不得再称为当前最终 HEAD。本冻结文档提交后的新 HEAD 必须引用其自己的 CI，不得沿用上述 run，更不得沿用仅证明 `b72ec70` 的 run 46127466291。通过本门禁 **不是** 合并授权。 |
+| Integration Accepted | 真实 OpenBot 遥测接入和目标基础设施验证通过 | **未通过。** 尚未完成真实 OpenBot 遥测集成和目标基础设施验证。 |
+| Production Accepted | 生产环境安全、可靠性和运维验收全部通过 | **未通过。** 未进行生产环境安全、可靠性和运维验收。生产准入保持关闭。 |
 
-2026-11-28 16:34 CST，负责人正式决定：PR #4 保持 OPEN，不批准合并。2026-11-28 17:05 CST 的跟进只授权关闭 `listTmpFiles()` 静默吞错缺口。本轮只在已授权的独立分支上修复、测试和更新 PR，不构成新的合并授权，也不得把本文件当作生产就绪声明。
+2026-11-28 16:34 CST，负责人正式决定：PR #4 保持 OPEN，不批准合并。2026-11-28 17:05 CST 的跟进只授权关闭 `listTmpFiles()` 静默吞错缺口。2026-11-28 17:17 CST，负责人确认 P0-2 代码修复作为工程事项通过，并授权本轮只做最终证据归档与门禁冻结，**明确不是合并授权**。不得把本文件当作 Integration Accepted、Production Accepted 或生产就绪声明。
+
+## 10. 建议的下一阶段（仅记录，本轮不启动）
+
+负责人指出：下一阶段应另行开展 OpenBot 遥测适配器的只读接口审计与集成方案设计。在该审计完成并获得独立授权之前，不实施跨仓代码变更。本轮不开始该项工作。
